@@ -1,0 +1,3 @@
+[submodule "Plugins/SynavisUE"]
+	path = Plugins/SynavisUE
+	url = https://github.com/dhelmrich/SynavisUE.git
