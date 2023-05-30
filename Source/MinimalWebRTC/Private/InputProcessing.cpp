@@ -16,8 +16,7 @@ UInputProcessing::UInputProcessing()
 
 void UInputProcessing::SendMessage(FString Message)
 {
-  auto* input_pointer = TCHAR_TO_ANSI(*Message);
-  FString Data = FString(reinterpret_cast<TCHAR*>(input_pointer));
+  FString Data = FString(reinterpret_cast<TCHAR*>(TCHAR_TO_ANSI(*Message)));
   OnPixelStreamingResponse.Broadcast(Data);
 }
 

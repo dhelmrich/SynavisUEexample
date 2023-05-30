@@ -6,7 +6,7 @@
 #include "Components/ActorComponent.h"
 #include "InputProcessing.generated.h"
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FPixelStreamingResponseCallback, FString, Message);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FPixelStreamingResponseCallbackMinimal, FString, Message);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCameraDataSwitchCallback, int, Setting);
 
 UENUM(BlueprintType)
@@ -55,7 +55,7 @@ public:
   virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
   UPROPERTY(BlueprintAssignable, Category = "Input Processing")
-    FPixelStreamingResponseCallback OnPixelStreamingResponse;
+    FPixelStreamingResponseCallbackMinimal OnPixelStreamingResponse;
 
   UPROPERTY(BlueprintAssignable, Category = "Input Processing")
     FCameraDataSwitchCallback OnCameraDataRequest;
