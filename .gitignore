@@ -70,7 +70,9 @@ Saved/*
 Intermediate/*
 Plugins/*/Intermediate/*
 Windows/*
+!Windows/run.bat
 Linux/*
+!Linux/run.sh
 
 # Cache files for the editor to use
 DerivedDataCache/*
