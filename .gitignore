@@ -51,6 +51,7 @@ Plugins/*/Binaries/*
 
 # Builds
 Build/*
+Samples/*
 
 # Whitelist PakBlacklist-<BuildConfiguration>.txt files
 !Build/*/
@@ -69,6 +70,10 @@ Saved/*
 # Compiled source files for the engine to use
 Intermediate/*
 Plugins/*/Intermediate/*
+Windows/*
+!Windows/run.bat
+Linux/*
+!Linux/run.sh
 
 # Cache files for the editor to use
 DerivedDataCache/*
