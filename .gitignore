@@ -77,3 +77,4 @@ Linux/*
 
 # Cache files for the editor to use
 DerivedDataCache/*
+*.zip
