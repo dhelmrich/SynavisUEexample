@@ -19,6 +19,9 @@ enum class EDataCollectionType : uint8
   Position
 };
 
+// forward declaration
+class ASpawnTarget;
+
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class MINIMALWEBRTC_API UInputProcessing : public UActorComponent
 {
@@ -31,12 +34,27 @@ public:
   void ProcessInput(TSharedPtr<FJsonObject> Descriptor);
 
   UPROPERTY()
-  class ASynavisDrone* Drone;
+    class ASynavisDrone* Drone;
   UPROPERTY()
-  class AWorldSpawner* WorldSpawner;
+    class AWorldSpawner* WorldSpawner;
 
-  UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Input Processing")
-    class UMaterialInstanceDynamic* ScreenData;
+  UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Visuals")
+    TObjectPtr<ASpawnTarget> LeafTarget;
+
+  UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Visuals")
+    TObjectPtr<ASpawnTarget> RootTarget;
+
+  UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Visuals")
+    TObjectPtr<ASpawnTarget> StemTarget;
+
+  UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Visuals")
+    class UMaterialInstanceDynamic* StemMaterial;
+
+  UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Visuals")
+    class UMaterialInstanceDynamic* LeafMaterial;
+
+  UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Visuals")
+    class UMaterialInstanceDynamic* RootMaterial;
 
   UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Input Processing")
     EDataCollectionType DataCollectionType = EDataCollectionType::None;
@@ -50,7 +68,7 @@ public:
 protected:
   // Called when the game starts
   virtual void BeginPlay() override;
-  
+
 
 
 public:
