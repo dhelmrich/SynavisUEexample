@@ -27,8 +27,13 @@ class MINIMALWEBRTC_API UInputProcessing : public UActorComponent
 public:
   // Sets default values for this component's properties
   UInputProcessing();
-  UFUNCTION(BlueprintCallable, Category = "Input Processing")
-    void ProcessInput(FString Descriptor);
+
+  void ProcessInput(TSharedPtr<FJsonObject> Descriptor);
+
+  UPROPERTY()
+  class ASynavisDrone* Drone;
+  UPROPERTY()
+  class AWorldSpawner* WorldSpawner;
 
   UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Input Processing")
     class UMaterialInstanceDynamic* ScreenData;
@@ -42,8 +47,6 @@ public:
   UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Input Processing")
     FName ObjectName;
 
-  void SendMessage(FString Message);
-
 protected:
   // Called when the game starts
   virtual void BeginPlay() override;
@@ -54,9 +57,4 @@ public:
   // Called every frame
   virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-  UPROPERTY(BlueprintAssignable, Category = "Input Processing")
-    FPixelStreamingResponseCallbackMinimal OnPixelStreamingResponse;
-
-  UPROPERTY(BlueprintAssignable, Category = "Input Processing")
-    FCameraDataSwitchCallback OnCameraDataRequest;
 };
