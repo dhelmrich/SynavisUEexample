@@ -10,11 +10,12 @@
 #include <SpawnTarget.h>
 
 // Sets default values for this component's properties
-UInputProcessing::UInputProcessing()
+AInputProcessing::AInputProcessing()
 {
   // Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
   // off to improve performance if you don't need them.
-  PrimaryComponentTick.bCanEverTick = true;
+  RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("RootComponent"));
+  
 
 
   // Find base leaf material master
@@ -22,7 +23,7 @@ UInputProcessing::UInputProcessing()
 }
 
 // Called when the game starts
-void UInputProcessing::BeginPlay()
+void AInputProcessing::BeginPlay()
 {
   Super::BeginPlay();
   // Search for an ASynavisDrone in the world
@@ -41,17 +42,17 @@ void UInputProcessing::BeginPlay()
       break;
     }
   }
-  Drone->ApplicationProcessInput = std::bind(&UInputProcessing::ProcessInput, this, std::placeholders::_1);
+  Drone->ApplicationProcessInput = std::bind(&AInputProcessing::ProcessInput, this, std::placeholders::_1);
 }
 
 // Called every frame
-void UInputProcessing::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+void AInputProcessing::Tick(float DeltaTime)
 {
-  Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+  Super::Tick(DeltaTime);
 
 }
 
-void UInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
+void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
 {
   auto Type = Descriptor->GetStringField("type");
   if (Type == "plant")

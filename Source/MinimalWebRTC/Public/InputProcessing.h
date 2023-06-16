@@ -22,14 +22,14 @@ enum class EDataCollectionType : uint8
 // forward declaration
 class ASpawnTarget;
 
-UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
-class MINIMALWEBRTC_API UInputProcessing : public UActorComponent
+UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnable))
+class MINIMALWEBRTC_API AInputProcessing : public AActor
 {
   GENERATED_BODY()
 
 public:
   // Sets default values for this component's properties
-  UInputProcessing();
+  AInputProcessing();
 
   void ProcessInput(TSharedPtr<FJsonObject> Descriptor);
 
@@ -38,41 +38,44 @@ public:
   UPROPERTY()
     class AWorldSpawner* WorldSpawner;
 
-  UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Visuals")
+  UPROPERTY(EditAnywhere,  Category = "Visuals")
     TObjectPtr<ASpawnTarget> LeafTarget;
 
-  UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Visuals")
+  UPROPERTY(EditAnywhere, Category = "Visuals")
     TObjectPtr<ASpawnTarget> RootTarget;
 
-  UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Visuals")
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Visuals")
     TObjectPtr<ASpawnTarget> StemTarget;
 
-  UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Visuals")
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Visuals")
     class UMaterialInstanceDynamic* StemMaterial;
 
-  UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Visuals")
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Visuals")
     class UMaterialInstanceDynamic* LeafMaterial;
 
-  UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Visuals")
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Visuals")
     class UMaterialInstanceDynamic* RootMaterial;
 
-  UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Input Processing")
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
     EDataCollectionType DataCollectionType = EDataCollectionType::None;
 
-  UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Input Processing")
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
     TArray<AActor*> RandomActors;
 
-  UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Input Processing")
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
     FName ObjectName;
+
+    UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Input Processing")
+    TMap<FString,TObjectPtr<UMaterialInstanceDynamic>> ActorMap;
 
 protected:
   // Called when the game starts
   virtual void BeginPlay() override;
 
-
+  
 
 public:
   // Called every frame
-  virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+  virtual void Tick(float DeltaTime) override;
 
 };
