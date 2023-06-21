@@ -56,6 +56,11 @@ public:
   UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Visuals")
     class UMaterialInstanceDynamic* RootMaterial;
 
+  UPROPERTY()
+    class UMaterial* StemBaseMaterial;
+  UPROPERTY()
+    class UMaterial* LeafBaseMaterial;
+
   UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
     EDataCollectionType DataCollectionType = EDataCollectionType::None;
 

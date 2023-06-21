@@ -16,7 +16,17 @@ AInputProcessing::AInputProcessing()
   // off to improve performance if you don't need them.
   RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("RootComponent"));
   
+  static ConstructorHelpers::FObjectFinder<UMaterial>
+    ColorMaterial(TEXT("/Script/Engine.Material'/Game/ColorMaterial.ColorMaterial'"));
+  static ConstructorHelpers::FObjectFinder<UMaterial>
+    MaizeMaterial(TEXT("/Script/Engine.Material'/Game/MaisBlattTextur_seamless_Mat.MaisBlattTextur_seamless_Mat'"));
 
+  // check if both exist
+  if (ColorMaterial.Succeeded() && MaizeMaterial.Succeeded())
+  {
+    StemBaseMaterial = ColorMaterial.Object;
+    LeafBaseMaterial = MaizeMaterial.Object;
+  }
 
   // Find base leaf material master
 
@@ -42,6 +52,11 @@ void AInputProcessing::BeginPlay()
       break;
     }
   }
+  StemMaterial = UMaterialInstanceDynamic::Create(StemBaseMaterial, this, "StemMaterial");
+  StemMaterial->SetVectorParameterValue("color", FLinearColor::Green);
+  LeafMaterial = UMaterialInstanceDynamic::Create(LeafBaseMaterial, this, "LeafMaterial");
+  RootMaterial = UMaterialInstanceDynamic::Create(StemBaseMaterial, this, "RootMaterial");
+  RootMaterial->SetVectorParameterValue("color", FLinearColor::White);
   Drone->ApplicationProcessInput = std::bind(&AInputProcessing::ProcessInput, this, std::placeholders::_1);
 }
 
@@ -83,7 +98,6 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
       SpawnTarget->ProcMesh->ClearAllMeshSections();
       // get the mesh data from the drone
       SpawnTarget->ProcMesh->CreateMeshSection_LinearColor(0, Drone->Points, Drone->Triangles, Drone->Normals, Drone->UVs, {}, Drone->Tangents, false);
-
     }
   }
 }
