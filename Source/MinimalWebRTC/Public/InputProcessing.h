@@ -8,6 +8,7 @@
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FPixelStreamingResponseCallbackMinimal, FString, Message);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCameraDataSwitchCallback, int, Setting);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FBPScreenshotCallback);
 
 UENUM(BlueprintType)
 enum class EDataCollectionType : uint8
@@ -72,6 +73,12 @@ public:
 
     UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Input Processing")
     TMap<FString,TObjectPtr<UMaterialInstanceDynamic>> ActorMap;
+
+    UPROPERTY(BlueprintAssignable, EditAnywhere, Category = "Input Processing")
+    FBPScreenshotCallback ScreenshotCallback;
+
+    UFUNCTION(BlueprintPure, Category = "Input Processing")
+    FString UniqueScreenshotName();
 
 protected:
   // Called when the game starts

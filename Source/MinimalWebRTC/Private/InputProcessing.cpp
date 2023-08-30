@@ -32,6 +32,12 @@ AInputProcessing::AInputProcessing()
 
 }
 
+FString AInputProcessing::UniqueScreenshotName()
+{
+  // return string using unix timestamp
+  return FString::Printf(TEXT("Screenshot_%d"), FDateTime::Now().ToUnixTimestamp());
+}
+
 // Called when the game starts
 void AInputProcessing::BeginPlay()
 {
@@ -99,6 +105,10 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
       // get the mesh data from the drone
       SpawnTarget->ProcMesh->CreateMeshSection_LinearColor(0, Drone->Points, Drone->Triangles, Drone->Normals, Drone->UVs, {}, Drone->Tangents, false);
     }
+  }
+  else if (Type == "screenshot")
+  {
+    ScreenshotCallback.Broadcast();
   }
 }
 
