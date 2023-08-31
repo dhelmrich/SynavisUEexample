@@ -1,5 +1,6 @@
-# SynavisUEexample
-Unreal Engine Example to be used with the Synavis Framework. Ready-To-Use.
+# Synavis Field Visualization example
+Unreal Engine Example to be used with the Synavis Framework. This example is the template for the field visualization we will show in different circumstances.
+While the generic field setup won't make it into the next release, this example might give a bit of a guide on how this is accomplished.
 
 ## DO A SHALLOW CLONE
 
