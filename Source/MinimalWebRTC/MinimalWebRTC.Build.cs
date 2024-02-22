@@ -8,7 +8,11 @@ public class MinimalWebRTC : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "Json", "PixelStreaming", "SynavisUE", "ProceduralMeshComponent" });
+		PublicDependencyModuleNames.AddRange(new string[]
+        {
+            "Core", "CoreUObject", "Engine", "InputCore", "Json", "PixelStreaming", "SynavisUE", "ProceduralMeshComponent",
+			"RHICore", "RHI", "RenderCore"
+        });
 
 		PrivateDependencyModuleNames.AddRange(new string[] { "PixelStreaming" });
 

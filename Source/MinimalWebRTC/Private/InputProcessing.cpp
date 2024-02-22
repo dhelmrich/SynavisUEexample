@@ -7,7 +7,13 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "SynavisDrone.h"
 #include "WorldSpawner.h"
+#include "MaterialShared.h"
 #include <SpawnTarget.h>
+#include "Shader.h"
+#include "VT/RuntimeVirtualTexture.h"
+#include "Materials/MaterialRenderProxy.h"
+#include "LightMeter.h"
+#include "Kismet/GameplayStatics.h"
 
 // Sets default values for this component's properties
 AInputProcessing::AInputProcessing()
@@ -15,7 +21,7 @@ AInputProcessing::AInputProcessing()
   // Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
   // off to improve performance if you don't need them.
   RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("RootComponent"));
-  
+
   static ConstructorHelpers::FObjectFinder<UMaterial>
     ColorMaterial(TEXT("/Script/Engine.Material'/Game/ColorMaterial.ColorMaterial'"));
   static ConstructorHelpers::FObjectFinder<UMaterial>
@@ -30,6 +36,44 @@ AInputProcessing::AInputProcessing()
 
   // Find base leaf material master
 
+}
+
+TArray<float> AInputProcessing::MeasureLightInfluxOfMesh(AActor* Actor)
+{
+  // retrieve mesh component, if any
+  auto MeshComponent = Actor->FindComponentByClass<UMeshComponent>();
+  if (!MeshComponent)
+  {
+    UE_LOG(LogTemp, Error, TEXT("This ACtor does not appear to contain a mesh component."));
+  }
+  TArray<URuntimeVirtualTexture*> textures = MeshComponent->GetRuntimeVirtualTextures();
+  for (URuntimeVirtualTexture* texture : textures)
+  {
+    // Log all the texture names
+    UE_LOG(LogTemp, Warning, TEXT("Texture name: %s"), *(texture->GetName()));
+  }
+  // dispatch job to render thread
+  ENQUEUE_RENDER_COMMAND(MeasureLightInfluxOfMesh)([this, MeshComponent](FRHICommandListImmediate& RHICmdList)
+    {
+      UMaterialInterface* material = MeshComponent->GetMaterial(0);
+      FMaterialRenderProxy* Proxy = material->GetRenderProxy();
+      auto* Material = Proxy->GetMaterialNoFallback(ERHIFeatureLevel::SM6);
+      if (!Material)
+      {
+        Material = Proxy->GetMaterialNoFallback(ERHIFeatureLevel::SM5);
+      }
+
+      if (!Material)
+      {
+        UE_LOG(LogTemp, Error, TEXT("This Actor does not appear to contain a material."));
+      }
+      else
+      {
+        // get render information
+
+      }
+    });
+  return TArray<float>();
 }
 
 // Called when the game starts
@@ -99,6 +143,30 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
       // get the mesh data from the drone
       SpawnTarget->ProcMesh->CreateMeshSection_LinearColor(0, Drone->Points, Drone->Triangles, Drone->Normals, Drone->UVs, {}, Drone->Tangents, false);
     }
+  }
+  else if (Type == "lightmeters")
+  {
+    TArray<TSharedPtr<FJsonValue>> LightMeters;
+    TArray<AActor*> FoundActors;
+    // find all light meters in scene
+    UGameplayStatics::GetAllActorsOfClass(GetWorld(), ALightMeter::StaticClass(), FoundActors);
+    for (auto* Actor : FoundActors)
+    {
+      auto LightMeter = Cast<ALightMeter>(Actor);
+      // add target, segment, and current LightIntensity to array
+      auto value = MakeShared<FJsonObject>();
+      value->SetNumberField("target", LightMeter->TargetID);
+      value->SetNumberField("segment", LightMeter->Segment);
+      value->SetNumberField("intensity", LightMeter->LightIntensity);
+      auto name = LightMeter->GetFullName();
+    }
+  }
+  else if(Type == "spawnmeter")
+  {
+    // spawn object of class LightMeter
+    auto LightMeter = GetWorld()->SpawnActor<ALightMeter>(ALightMeter::StaticClass());
+    // apply possible properties to it
+    Drone->ApplyJSONToObject(LightMeter, Descriptor.Get());
   }
 }
 

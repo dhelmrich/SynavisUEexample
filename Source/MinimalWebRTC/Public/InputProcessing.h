@@ -73,11 +73,12 @@ public:
     UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Input Processing")
     TMap<FString,TObjectPtr<UMaterialInstanceDynamic>> ActorMap;
 
+    UFUNCTION(BlueprintCallable, Category = "Input Processing")
+    TArray<float> MeasureLightInfluxOfMesh(AActor* Actor);
+
 protected:
   // Called when the game starts
   virtual void BeginPlay() override;
-
-  
 
 public:
   // Called every frame
