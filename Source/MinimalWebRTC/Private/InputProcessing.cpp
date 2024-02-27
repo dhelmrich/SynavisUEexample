@@ -14,6 +14,11 @@
 #include "Materials/MaterialRenderProxy.h"
 #include "LightMeter.h"
 #include "Kismet/GameplayStatics.h"
+#include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonWriter.h"
+#include "Dom/JsonObject.h"
+
+#define COMPACT TCondensedJsonPrintPolicy<TCHAR>
 
 // Sets default values for this component's properties
 AInputProcessing::AInputProcessing()
@@ -118,6 +123,8 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
   {
     Drone->ParseGeometryFromJson(Descriptor);
     // find the spawntarget in the scene
+
+
     if (Descriptor->HasField("part"))
     {
       auto Part = Descriptor->GetStringField("part");
@@ -146,7 +153,7 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
   }
   else if (Type == "lightmeters")
   {
-    TArray<TSharedPtr<FJsonValue>> LightMeters;
+    auto result = MakeShared<FJsonObject>();
     TArray<AActor*> FoundActors;
     // find all light meters in scene
     UGameplayStatics::GetAllActorsOfClass(GetWorld(), ALightMeter::StaticClass(), FoundActors);
@@ -155,11 +162,19 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
       auto LightMeter = Cast<ALightMeter>(Actor);
       // add target, segment, and current LightIntensity to array
       auto value = MakeShared<FJsonObject>();
-      value->SetNumberField("target", LightMeter->TargetID);
-      value->SetNumberField("segment", LightMeter->Segment);
-      value->SetNumberField("intensity", LightMeter->LightIntensity);
-      auto name = LightMeter->GetFullName();
+      value->SetNumberField("t", LightMeter->TargetID);
+      value->SetNumberField("s", LightMeter->Segment);
+      value->SetNumberField("i", LightMeter->LightIntensity);
+      auto name = LightMeter->GetName();
+	  result->SetObjectField(name, value);
     }
+    result->SetStringField("type","meter");
+    // make FString from JSON
+    FString OutputString;
+    TSharedRef<TJsonWriter<TCHAR, COMPACT>> Writer = TJsonWriterFactory<TCHAR, COMPACT>::Create(&OutputString);
+    FJsonSerializer::Serialize(result, Writer);
+    // send to drone
+    Drone->SendResponse(OutputString);
   }
   else if(Type == "spawnmeter")
   {
@@ -167,6 +182,8 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     auto LightMeter = GetWorld()->SpawnActor<ALightMeter>(ALightMeter::StaticClass());
     // apply possible properties to it
     Drone->ApplyJSONToObject(LightMeter, Descriptor.Get());
+    const FString name = LightMeter->GetName();
+    Drone->SendResponse(FString::Printf(TEXT("{\"type\":\"spawnmeter\",\"name\":\"%s\"}"), *name));
   }
 }
 
