@@ -23,6 +23,15 @@ class MINIMALWEBRTC_API ALightMeter : public AActor
 public:	
 	// Sets default values for this actor's properties
 	ALightMeter();
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	bool bUseMeasurementSurface = false;
+
+	UPROPERTY(EditAnywhere)
+	FVector NearClipPlane = FVector(0, 0, 0);
+
+	UPROPERTY(EditAnywhere)
+	float DistanceToSurface = 1.0f;
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
 	UStaticMeshComponent* LightMeasuringReference;
@@ -106,11 +115,16 @@ protected:
 	UPROPERTY()
 	UMaterial* LightMeterMaterial;
 
+	UFUNCTION()
+	void CreateOrDestroyMeasurementSurface(bool bCreate);
+
 	int Counter = 0;
 
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
+  virtual void OnConstruction(const FTransform& Transform) override;
+
 private:
 	int32 skip = 0;
 

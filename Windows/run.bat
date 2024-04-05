@@ -1,6 +1,8 @@
 @echo off
 start .\MinimalWebRTC.exe -PixelStreamingIP=127.0.0.1 -PixelStreamingPort=8888 ^
- -RenderOffscreen -ForceRes -ResX=1280 -RexY=720 -Unattended -PixelStreamingH264Profile=HIGH ^
+ -RenderOffscreen -ForceRes -ResX=1280 -RexY=720 -Unattended ^
  -PixelStreamingWebRTCDegradationPreference=MAINTAIN_QUALITY ^
--ExecCmds="PixelStreaming.WebRTC.DisableTransmitAudio true, PixelStreaming.Encoder.Codec H265, PixelStreaming.WebRTC.DisableAudioSync true, PixelStreaming.AllowPixelStreamingCommands true, PixelStreaming.Encoder.KeyframeInterval 1, PixelStreaming.Encoder.EnableFillerData true, PixelStreaming.WebRTC.DegradationPreference MAINTAIN_QUALITY, PixelStreaming.WebRTC.Fps 10, t.MaxFPS 10"
+ -PixelStreamingWebRTCVideoEncoder=H264 ^
+-ExecCmds="PixelStreaming.WebRTC.DisableTransmitAudio true, PixelStreaming.Encoder.Codec H264, PixelStreaming.WebRTC.DisableAudioSync true, PixelStreaming.AllowPixelStreamingCommands true, PixelStreaming.Encoder.EnableFillerData true, PixelStreaming.WebRTC.DegradationPreference MAINTAIN_QUALITY, t.MaxFPS 25"
 
+REM , PixelStreaming.Encoder.KeyframeInterval 1, PixelStreaming.WebRTC.Fps 10

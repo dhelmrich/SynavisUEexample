@@ -17,11 +17,11 @@ ALightMeter::ALightMeter()
 {
   // Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
   PrimaryActorTick.bCanEverTick = true;
-
+  // create the measurement surface
   LightMeasuringReference = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("LightMeasuringReference"));
   RootComponent = LightMeasuringReference;
   LightMeterTarget = CreateDefaultSubobject<USceneCaptureComponent2D>(TEXT("LightMeterTarget"));
-  LightMeterTarget->AddLocalOffset(FVector(0.0f, 0.0f, 100.0f));
+  LightMeterTarget->AddLocalOffset(FVector(0.0f, 0.0f, 1.0f));
   LightMeterTarget->SetupAttachment(RootComponent);
 
   // fetch /Script/Engine.StaticMesh'/Engine/BasicShapes/Plane.Plane'
@@ -39,7 +39,7 @@ ALightMeter::ALightMeter()
   }
 
   // set near clip plane of camera to no distance
-  LightMeterTarget->ClipPlaneBase = FVector(0.0, 0.0, 0.0);
+  LightMeterTarget->ClipPlaneBase = NearClipPlane;
   PIDController.SetMeasurement(&LightIntensity);
   PIDController.SetIncrementMeasurementLength(false);
 }
@@ -49,7 +49,8 @@ void ALightMeter::SetMeasureSurfaceSize(float SideLength)
   // plane is 100 units with a pivot in the middle
   LightMeasuringReference->SetWorldScale3D(FVector(SideLength / 100.0f, SideLength / 100.0f, 1.0f));
   // adapt FOVangle accordingly, 100 side length = 50 degrees FOV
-  LightMeterTarget->FOVAngle = FMath::Atan(SideLength / 100.0f) * 180.0f / PI;
+  LightMeterTarget->FOVAngle = FMath::Atan(SideLength / DistanceToSurface) * 180.0f / PI;
+  LightMeterTarget->SetWorldScale3D(FVector(1.0,1.0,1.0) / (DistanceToSurface * 10.0f));
 }
 
 void ALightMeter::AddAdjustmentSetting(float* Setting, double TargetAccuracy)
@@ -106,6 +107,19 @@ void ALightMeter::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedE
   Super::PostEditChangeProperty(PropertyChangedEvent);
   if (PropertyChangedEvent.GetPropertyName() == "MeasureSurfaceSideLength")
   {
+    SetMeasureSurfaceSize(MeasureSurfaceSideLength);
+  }
+  else if (PropertyChangedEvent.GetPropertyName() == "bUseMeasurementSurface")
+  {
+    CreateOrDestroyMeasurementSurface(bUseMeasurementSurface);
+  }
+  else if (PropertyChangedEvent.GetPropertyName() == "NearClipPlane")
+  {
+    LightMeterTarget->ClipPlaneBase = NearClipPlane;
+  }
+  else if (PropertyChangedEvent.GetPropertyName() == "DistanceToSurface")
+  {
+    LightMeterTarget->SetRelativeLocation(FVector(0.0f, 0.0f, DistanceToSurface));
     SetMeasureSurfaceSize(MeasureSurfaceSideLength);
   }
 }
@@ -194,5 +208,16 @@ void ALightMeter::Tick(float DeltaTime)
   {
     skip--;
   }
+}
+
+void ALightMeter::OnConstruction(const FTransform& Transform)
+{
+  Super::OnConstruction(Transform);
+  CreateOrDestroyMeasurementSurface(bUseMeasurementSurface);
+}
+
+void ALightMeter::CreateOrDestroyMeasurementSurface(bool bCreate)
+{
+  LightMeasuringReference->SetVisibility(bCreate);
 }
 
