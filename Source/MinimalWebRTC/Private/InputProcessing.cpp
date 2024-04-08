@@ -118,7 +118,7 @@ void AInputProcessing::Tick(float DeltaTime)
 
 void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
 {
-  auto Type = Descriptor->GetStringField("type");
+  auto Type = Descriptor->GetStringField(TEXT("type"));
   if (Type == "plant")
   {
     Drone->ParseGeometryFromJson(Descriptor);
