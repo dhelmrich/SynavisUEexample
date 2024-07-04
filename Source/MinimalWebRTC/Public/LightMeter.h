@@ -15,6 +15,9 @@ struct FLightMeterData
 
 class ULightComponnt;
 
+/**
+ *en au
+ */
 UCLASS()
 class MINIMALWEBRTC_API ALightMeter : public AActor
 {
@@ -55,6 +58,9 @@ public:
 
 	UFUNCTION(BlueprintCallable)
 	void SetMeasureSurfaceSize(float SideLength);
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Callibration")
+	float Sensitivity = 1.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	int CounterMax = 50;
