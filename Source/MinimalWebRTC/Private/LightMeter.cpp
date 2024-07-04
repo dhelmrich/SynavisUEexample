@@ -40,8 +40,16 @@ ALightMeter::ALightMeter()
 
   // set near clip plane of camera to no distance
   LightMeterTarget->ClipPlaneBase = NearClipPlane;
+  
   PIDController.SetMeasurement(&LightIntensity);
   PIDController.SetIncrementMeasurementLength(false);
+}
+
+void ALightMeter::SetLightIntensity(float Intensity)
+{
+
+  LightIntensity = Intensity;
+  LightMeterTarget->PostProcessSettings.AutoExposureBias = LightIntensity;
 }
 
 void ALightMeter::SetMeasureSurfaceSize(float SideLength)
@@ -141,6 +149,7 @@ void ALightMeter::BeginPlay()
   // set LightMeasuringReference (camera) to render to the new render target
   Target->TargetGamma = 1.0f;
 
+  LightMeterTarget->PostProcessSettings.AutoExposureBias = this->LightIntensity;
 
 
   // search scene for all ULightComponents
