@@ -8,6 +8,7 @@
 #include "Containers/Deque.h"
 #include "LightMeter.generated.h"
 
+
 USTRUCT()
 struct FLightMeterData
 {
@@ -56,6 +57,9 @@ public:
 	// to be set only in render thread
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	float LightIntensity;
+
+	UFUNCTION()
+	  void SetLightIntensity(float Intensity);
 
 	UFUNCTION(BlueprintCallable)
 	void SetMeasureSurfaceSize(float SideLength);
@@ -137,6 +141,7 @@ protected:
 	void CreateOrDestroyMeasurementSurface(bool bCreate);
 
 	int Counter = 0;
+
 
 public:	
 	// Called every frame

@@ -163,6 +163,11 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
       Drone->SendResponse(TEXT("{\"type\":\"error\",\"message\":\"object is not a lightmeter\"}"));
       return;
     }
+    else if(Descriptor->HasField(TEXT("sensitivity")))
+    {
+      float sensitivity = Descriptor->GetNumberField(TEXT("sensitivity"));
+      LightMeter->SetLightIntensity(sensitivity);
+    }
     auto response = FString::Printf(
       TEXT("{\"type\":\"lightmeter\",\"name\":\"%s\", position: {\"x\":%f,\"y\":%f,\"z\":%f}}, intensity: %f"),
       *LightMeter->GetName(),
