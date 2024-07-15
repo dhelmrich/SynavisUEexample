@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "PID.h"
+#include "Containers/Deque.h"
 #include "LightMeter.generated.h"
 
 USTRUCT()
@@ -94,6 +95,10 @@ public:
 	UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Target")
 	int Segment = -1;
 
+  UFUNCTION(BlueprintCallable, Category = "Target")
+  void StartMeasurementAtObject(TArray<FVector> Points, float TimePerMeasurement = 1.f);
+
+
 	// post edit change property for MeasureSurfaceSideLength
 #if WITH_EDITOR
    virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;	
@@ -120,6 +125,13 @@ protected:
 
 	UPROPERTY()
 	UMaterial* LightMeterMaterial;
+
+  TDeque<FVector> MeasurementPoints;
+
+	UPROPERTY()
+	float TimePerMeasurement = 1.f;
+	UPROPERTY()
+	float TimeSpentMeasuring = 0.f;
 
 	UFUNCTION()
 	void CreateOrDestroyMeasurementSurface(bool bCreate);

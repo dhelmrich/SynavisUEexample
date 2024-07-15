@@ -17,6 +17,8 @@
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
 #include "Dom/JsonObject.h"
+#include "Engine/StaticMeshActor.h"
+
 
 #define COMPACT TCondensedJsonPrintPolicy<TCHAR>
 
@@ -225,5 +227,16 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     response += TEXT("]}");
     Drone->SendResponse(response);
   }
+  else if(Type == "graphcal")
+  {
+    // sample the meter as well as the directional light intensity
+
+  }
+}
+
+void AInputProcessing::InitializeCalibration()
+{
+  CallibrationMaterialInstance = WorldSpawner->GenerateInstanceFromName("CallibrationMaterial", true);
+  CallibrationTest->GetStaticMeshComponent()->SetMaterial(0, CallibrationMaterialInstance);
 }
 

@@ -33,6 +33,10 @@ public:
 
   void ProcessInput(TSharedPtr<FJsonObject> Descriptor);
 
+
+  UFUNCTION(BlueprintCallable)
+  void InitializeCalibration();
+
   UPROPERTY()
     class ASynavisDrone* Drone;
   UPROPERTY()
@@ -56,10 +60,16 @@ public:
   UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Visuals")
     class UMaterialInstanceDynamic* RootMaterial;
 
+    UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Visuals")
+    class UMaterialInstanceDynamic* CallibrationMaterialInstance;
+
   UPROPERTY()
     class UMaterial* StemBaseMaterial;
   UPROPERTY()
     class UMaterial* LeafBaseMaterial;
+
+  UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
+  class AStaticMeshActor* CallibrationTest;
 
   UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
     EDataCollectionType DataCollectionType = EDataCollectionType::None;

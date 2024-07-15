@@ -12,6 +12,7 @@
 
 #include "Components/LightComponent.h"
 
+
 // Sets default values
 ALightMeter::ALightMeter()
 {
@@ -42,6 +43,7 @@ ALightMeter::ALightMeter()
   LightMeterTarget->ClipPlaneBase = NearClipPlane;
   PIDController.SetMeasurement(&LightIntensity);
   PIDController.SetIncrementMeasurementLength(false);
+
 }
 
 void ALightMeter::SetMeasureSurfaceSize(float SideLength)
@@ -102,6 +104,31 @@ void ALightMeter::StopCallibrate(bool Failure)
 }
 
 #if WITH_EDITOR
+void ALightMeter::StartMeasurementAtObject(TArray<FVector> Points, float TimePerMeasurement)
+{
+  MeasurementPoints = Points;
+  this->TimePerMeasurement = TimePerMeasurement;
+  this->TimeSpentMeasuring = 0.f;
+  if (MeasurementPoints.Num() > 0)
+  {
+    // retrieve point
+    auto point = MeasurementPoints.First();
+    MeasurementPoints.PopFirst();
+    // check the normal
+    FHitResult Hitres;
+    FCollisionQueryParams CollisionParams;
+    CollisionParams.AddIgnoredActor(this);
+    GetWorld()->LineTraceSingleByChannel(Hitres, point + FVector(0, 0, 10), point - FVector(0, 0, 10), ECC_Visibility, CollisionParams);
+    // get normal
+    auto normal = Hitres.ImpactNormal;
+    // set our position to point + normal*10.0000009536743164
+    this->SetActorLocation(point + normal * 10.0000009536743164);
+    // set our rotation to the normal
+    this->SetActorRotation(normal.Rotation());
+    this->TimeSpentMeasuring = this->TimePerMeasurement;
+  }
+}
+
 void ALightMeter::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
   Super::PostEditChangeProperty(PropertyChangedEvent);
@@ -207,6 +234,29 @@ void ALightMeter::Tick(float DeltaTime)
   else if (skip > 0)
   {
     skip--;
+  }
+
+  if(this->TimeSpentMeasuring <= 0.f && this->MeasurementPoints.Num() > 0)
+  {
+    // retrieve point
+    auto point = this->MeasurementPoints.First();
+    MeasurementPoints.PopFirst();
+    // check the normal
+    FHitResult Hitres;
+    FCollisionQueryParams CollisionParams;
+    CollisionParams.AddIgnoredActor(this);
+    GetWorld()->LineTraceSingleByChannel(Hitres, point + FVector(0, 0, 10), point - FVector(0, 0, 10), ECC_Visibility, CollisionParams);
+    // get normal
+    auto normal = Hitres.ImpactNormal;
+    // set our position to point + normal*10.0000009536743164
+    this->SetActorLocation(point + normal * 10.0000009536743164);
+    // set our rotation to the normal
+    this->SetActorRotation(normal.Rotation());
+    this->TimeSpentMeasuring = this->TimePerMeasurement;
+  }
+  else if (this->TimeSpentMeasuring > 0.f)
+  {
+    this->TimeSpentMeasuring -= DeltaTime;
   }
 }
 
