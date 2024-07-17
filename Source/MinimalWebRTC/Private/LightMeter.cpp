@@ -45,6 +45,7 @@ ALightMeter::ALightMeter()
   PIDController.SetMeasurement(&LightIntensity);
   PIDController.SetIncrementMeasurementLength(false);
 
+
 }
 
 void ALightMeter::SetLightIntensity(float Intensity)
@@ -111,17 +112,17 @@ void ALightMeter::StopCallibrate(bool Failure)
   }
 }
 
-#if WITH_EDITOR
-void ALightMeter::StartMeasurementAtObject(TArray<FVector> Points, float TimePerMeasurement)
+void ALightMeter::StartMeasurementAtObject(TArray<FVector> Points, float inTimePerMeasurement)
 {
   MeasurementPoints = Points;
-  this->TimePerMeasurement = TimePerMeasurement;
+  this->TimePerMeasurement = inTimePerMeasurement;
   this->TimeSpentMeasuring = 0.f;
   if (MeasurementPoints.Num() > 0)
   {
     // retrieve point
-    auto point = MeasurementPoints.First();
-    MeasurementPoints.PopFirst();
+    auto point = MeasurementPoints[0];
+    CurrentMeasurementIndex = 0;
+    CurrentMeasurementAmount = 0;
     // check the normal
     FHitResult Hitres;
     FCollisionQueryParams CollisionParams;
@@ -137,6 +138,7 @@ void ALightMeter::StartMeasurementAtObject(TArray<FVector> Points, float TimePer
   }
 }
 
+#if WITH_EDITOR
 void ALightMeter::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
   Super::PostEditChangeProperty(PropertyChangedEvent);
@@ -245,11 +247,15 @@ void ALightMeter::Tick(float DeltaTime)
     skip--;
   }
 
-  if(this->TimeSpentMeasuring <= 0.f && this->MeasurementPoints.Num() > 0)
+  if(this->TimeSpentMeasuring <= 0.f && CurrentMeasurementIndex < MeasurementPoints.Num())
   {
+    if(CurrentMeasurementIndex >= 0)
+    {
+      LightInfluxes[CurrentMeasurementIndex] /= CurrentMeasurementAmount;
+      CurrentMeasurementAmount = 0;
+    }
     // retrieve point
-    auto point = this->MeasurementPoints.First();
-    MeasurementPoints.PopFirst();
+    auto point = MeasurementPoints[++CurrentMeasurementIndex];
     // check the normal
     FHitResult Hitres;
     FCollisionQueryParams CollisionParams;
@@ -266,6 +272,8 @@ void ALightMeter::Tick(float DeltaTime)
   else if (this->TimeSpentMeasuring > 0.f)
   {
     this->TimeSpentMeasuring -= DeltaTime;
+    LightInfluxes[CurrentMeasurementIndex] += this->LightIntensity;
+    CurrentMeasurementAmount++;
   }
 }
 

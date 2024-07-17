@@ -100,7 +100,7 @@ public:
 	int Segment = -1;
 
   UFUNCTION(BlueprintCallable, Category = "Target")
-  void StartMeasurementAtObject(TArray<FVector> Points, float TimePerMeasurement = 1.f);
+  void StartMeasurementAtObject(TArray<FVector> Points, float inTimePerMeasurement = 1.f);
 
 
 	// post edit change property for MeasureSurfaceSideLength
@@ -130,12 +130,17 @@ protected:
 	UPROPERTY()
 	UMaterial* LightMeterMaterial;
 
-  TDeque<FVector> MeasurementPoints;
+	UPROPERTY()
+  TArray<FVector> MeasurementPoints;
+	UPROPERTY()
+	TArray<float> LightInfluxes;
 
 	UPROPERTY()
-	float TimePerMeasurement = 1.f;
+	float TimePerMeasurement = 0.1f;
 	UPROPERTY()
 	float TimeSpentMeasuring = 0.f;
+	int CurrentMeasurementIndex = -1;
+	int CurrentMeasurementAmount = 0;
 
 	UFUNCTION()
 	void CreateOrDestroyMeasurementSurface(bool bCreate);
