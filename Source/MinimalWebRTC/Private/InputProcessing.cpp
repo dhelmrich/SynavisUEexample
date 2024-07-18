@@ -13,6 +13,7 @@
 #include "VT/RuntimeVirtualTexture.h"
 #include "Materials/MaterialRenderProxy.h"
 #include "LightMeter.h"
+#include "PlantParts.h"
 #include "Kismet/GameplayStatics.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
@@ -153,17 +154,39 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
       SpawnTarget->ProcMesh->CreateMeshSection_LinearColor(0, Drone->Points, Drone->Triangles, Drone->Normals, Drone->UVs, {}, Drone->Tangents, false);
     }
   }
+  else if (Type == "do")
+  {
+    auto Points = GetArrayField<FVector>(Descriptor, "p");
+    auto Normals = GetArrayField<FVector>(Descriptor, "n");
+    auto Indices = GetArrayField<int32>(Descriptor, "i");
+    auto UV = GetArrayField<FVector2D>(Descriptor, "t");
+    auto local_index = GetIntFieldOr(Descriptor, "l", 0);
+    auto type = GetIntFieldOr(Descriptor, "o", 1);
+
+    // fetch plant from local index
+    auto plant = (FieldActors.IsValidIndex(local_index)) ? FieldActors[local_index] : nullptr;
+    if (!plant)
+    {
+      Drone->SendResponse(TEXT("{\"type\":\"error\",\"message\":\"plant not found\"}"));
+      return;
+    }
+    auto ind = plant->AddMesh(Points, Normals, Indices, UV, {}, {}, type);
+    auto material_key = FString::Printf(TEXT("%n/%n"), local_index, type);
+    auto inst = WorldSpawner->GenerateInstanceFromName(material_key, false);
+    plant->Mesh->SetMaterial(ind, inst);
+    
+  }
   else if (Type == "lightmeter")
   {
     auto object = Descriptor->GetObjectField(TEXT("object"));
     auto sceneobject = Drone->GetObjectFromJSON(Descriptor);
     auto LightMeter = Cast<ALightMeter>(sceneobject);
-    if(!LightMeter)
+    if (!LightMeter)
     {
       Drone->SendResponse(TEXT("{\"type\":\"error\",\"message\":\"object is not a lightmeter\"}"));
       return;
     }
-    else if(Descriptor->HasField(TEXT("sensitivity")))
+    else if (Descriptor->HasField(TEXT("sensitivity")))
     {
       float sensitivity = Descriptor->GetNumberField(TEXT("sensitivity"));
       LightMeter->SetLightIntensity(sensitivity);
@@ -232,10 +255,39 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     response += TEXT("]}");
     Drone->SendResponse(response);
   }
-  else if(Type == "graphcal")
+  else if (Type == "placeplant")
   {
-    // sample the meter as well as the directional light intensity
+    // place plants according to spawn rule
+    auto spawn_number = GetIntFieldOr(Descriptor, TEXT("number"), 1);
+    auto spawn_rule = GetStringFieldOr(Descriptor, TEXT("rule"), TEXT("square"));
+    auto mpi_world_size = GetIntFieldOr(Descriptor, TEXT("mpi_world_size"), 1);
+    auto mpi_rank = GetIntFieldOr(Descriptor, TEXT("mpi_rank"), 0);
+    auto density = GetDoubleFieldOr(Descriptor, TEXT("density"), 1.0f);
 
+    auto local_count = spawn_number / mpi_world_size;
+    auto side_length = (int32)FMath::Floor(FMath::Sqrt((float)spawn_number));
+
+    // find out which partition belongs to us in terms of the MPI world size
+    auto start_p = mpi_world_size % (int32)FMath::Sqrt((float)mpi_world_size);
+    auto start_q = FMath::Floor(FMath::Sqrt((float)mpi_world_size));
+    // partition to indices
+    auto start_i = start_p * side_length / FMath::Sqrt((float)mpi_world_size);
+    auto start_j = start_q * side_length / FMath::Sqrt((float)mpi_world_size);
+    // index to coordinate
+    for (auto k = 0; k < local_count; k++)
+    {
+      auto i = start_i + k % side_length;
+      auto j = start_j + k / side_length;
+      auto x = i * density;
+      auto y = j * density;
+      auto z = 0.0f;
+      // random rotation
+      auto r = FMath::RandRange(0.0f, 360.0f);
+      auto plant = GetWorld()->SpawnActor<APlantParts>(APlantParts::StaticClass(), FVector(x, y, z), FRotator(0.0f, r, 0.0f));
+    }
+
+    // send response
+    Drone->SendResponse(TEXT("{\"type\":\"placeplant\",\"status\":\"ok\"}"));
   }
 }
 

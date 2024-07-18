@@ -21,6 +21,7 @@ enum class EDataCollectionType : uint8
 
 // forward declaration
 class ASpawnTarget;
+class APlantParts;
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnable))
 class MINIMALWEBRTC_API AInputProcessing : public AActor
@@ -75,7 +76,7 @@ public:
     EDataCollectionType DataCollectionType = EDataCollectionType::None;
 
   UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
-    TArray<AActor*> RandomActors;
+    TArray<APlantParts*> FieldActors;
 
   UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
     FName ObjectName;
