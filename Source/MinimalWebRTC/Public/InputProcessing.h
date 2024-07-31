@@ -43,26 +43,8 @@ public:
   UPROPERTY()
     class AWorldSpawner* WorldSpawner;
 
-  UPROPERTY(EditAnywhere,  Category = "Visuals")
-    TObjectPtr<ASpawnTarget> LeafTarget;
-
-  UPROPERTY(EditAnywhere, Category = "Visuals")
-    TObjectPtr<ASpawnTarget> RootTarget;
-
   UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Visuals")
-    TObjectPtr<ASpawnTarget> StemTarget;
-
-  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Visuals")
-    class UMaterialInstanceDynamic* StemMaterial;
-
-  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Visuals")
-    class UMaterialInstanceDynamic* LeafMaterial;
-
-  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Visuals")
-    class UMaterialInstanceDynamic* RootMaterial;
-
-    UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Visuals")
-    class UMaterialInstanceDynamic* CallibrationMaterialInstance;
+  class UMaterialInstanceDynamic* CallibrationMaterialInstance;
 
   UPROPERTY()
     class UMaterial* StemBaseMaterial;
@@ -74,9 +56,17 @@ public:
 
   UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
     EDataCollectionType DataCollectionType = EDataCollectionType::None;
+    
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
+	TObjectPtr<AActor> SunSky;
+
+  UFUNCTION(BlueprintCallable, Category = "Input Processing")
+    void UpdateTime(FString Timecode);
 
   UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
     TArray<APlantParts*> FieldActors;
+
+    TArray<class ALightMeter*> LightMeters;
 
   UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
     FName ObjectName;

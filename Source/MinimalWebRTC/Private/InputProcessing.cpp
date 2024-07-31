@@ -19,6 +19,7 @@
 #include "Serialization/JsonWriter.h"
 #include "Dom/JsonObject.h"
 #include "Engine/StaticMeshActor.h"
+#include "LightMeter.h"
 
 
 #define COMPACT TCondensedJsonPrintPolicy<TCHAR>
@@ -44,6 +45,22 @@ AInputProcessing::AInputProcessing()
 
   // Find base leaf material master
 
+}
+
+void AInputProcessing::UpdateTime(FString Timecode)
+{
+  // time in format: YYYY-MM-DDTHH:MM:SS+TZ
+  FDateTime Time;
+  FDateTime::Parse(Timecode, Time);
+  auto month = Time.GetMonth();
+  auto day = Time.GetDay();
+  auto solartime = Time.GetHour() + Time.GetMinute() / 60.0f + Time.GetSecond() / 3600.0f;
+  auto* month_prop = SunSky->GetClass()->FindPropertyByName(TEXT("Month"));
+  auto* day_prop = SunSky->GetClass()->FindPropertyByName(TEXT("Day"));
+  auto* solartime_prop = SunSky->GetClass()->FindPropertyByName(TEXT("SolarTime"));
+  CastField<FIntProperty>(month_prop)->SetPropertyValue_InContainer(SunSky, month);
+  CastField<FIntProperty>(day_prop)->SetPropertyValue_InContainer(SunSky, day);
+  CastField<FDoubleProperty>(solartime_prop)->SetPropertyValue_InContainer(SunSky, solartime);
 }
 
 TArray<float> AInputProcessing::MeasureLightInfluxOfMesh(AActor* Actor)
@@ -99,16 +116,15 @@ void AInputProcessing::BeginPlay()
     {
       WorldSpawner = Cast<AWorldSpawner>(*ActorItr);
     }
-    if (Drone && WorldSpawner)
+    else if (ActorItr->IsA(ALightMeter::StaticClass()))
     {
-      break;
+      LightMeters.Add(Cast<ALightMeter>(*ActorItr));
+    }
+    else if(ActorItr->GetName().Contains(TEXT("SunSky")))
+    {
+      SunSky = *ActorItr;
     }
   }
-  StemMaterial = UMaterialInstanceDynamic::Create(StemBaseMaterial, this, "StemMaterial");
-  StemMaterial->SetVectorParameterValue("color", FLinearColor::Green);
-  LeafMaterial = UMaterialInstanceDynamic::Create(LeafBaseMaterial, this, "LeafMaterial");
-  RootMaterial = UMaterialInstanceDynamic::Create(StemBaseMaterial, this, "RootMaterial");
-  RootMaterial->SetVectorParameterValue("color", FLinearColor::White);
   Drone->ApplicationProcessInput = std::bind(&AInputProcessing::ProcessInput, this, std::placeholders::_1);
 }
 
@@ -126,32 +142,11 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
   {
     Drone->ParseGeometryFromJson(Descriptor);
     // find the spawntarget in the scene
-
-
     if (Descriptor->HasField(TEXT("part")))
     {
-      auto Part = Descriptor->GetStringField(TEXT("part"));
-      decltype(LeafTarget) SpawnTarget;
-      if (Part == "leaf")
-      {
-        SpawnTarget = LeafTarget;
-      }
-      else if (Part == "stem")
-      {
-        SpawnTarget = StemTarget;
-      }
-      else if (Part == "root")
-      {
-        SpawnTarget = RootTarget;
-      }
-      else
-      {
-        return;
-      }
-      // clear the target's mesh sections
-      SpawnTarget->ProcMesh->ClearAllMeshSections();
-      // get the mesh data from the drone
-      SpawnTarget->ProcMesh->CreateMeshSection_LinearColor(0, Drone->Points, Drone->Triangles, Drone->Normals, Drone->UVs, {}, Drone->Tangents, false);
+      auto plant = Cast<APlantParts>(Drone->GetObjectFromJSON(Descriptor));
+      auto part = GetIntFieldOr(Descriptor, TEXT("part"), 3);
+      plant->AddMesh(Drone->Points, Drone->Normals, Drone->Triangles, Drone->UVs, {}, {}, part);
     }
   }
   else if (Type == "do")
@@ -174,7 +169,28 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     auto material_key = FString::Printf(TEXT("%n/%n"), local_index, type);
     auto inst = WorldSpawner->GenerateInstanceFromName(material_key, false);
     plant->Mesh->SetMaterial(ind, inst);
-    
+  }
+  else if (Type == TEXT("t"))
+  {
+    auto Timecode = Descriptor->GetStringField(TEXT("s"));
+    UpdateTime(Timecode);
+  }
+  else if (Type == "mm")
+  {
+    auto Points = GetArrayField<FVector>(Descriptor, "p");
+    auto local_id = Descriptor->GetNumberField(TEXT("l"));
+    auto* Meter = *LightMeters.FindByPredicate([](ALightMeter* Meter) { return Meter->IsIdling(); });
+    if(!Meter)
+    {
+      // schedule a task in game thread to retry
+      FTimerHandle TimerHandle;
+      GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this, Descriptor]() { ProcessInput(Descriptor); }, 0.1f, false);
+    }
+    else
+    {
+      auto Duration = GetDoubleFieldOr(Descriptor, "d", 0.3);
+      Meter->StartMeasurementAtObject(Points, Duration);
+    }
   }
   else if (Type == "lightmeter")
   {
@@ -266,13 +282,11 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
 
     auto local_count = spawn_number / mpi_world_size;
     auto side_length = (int32)FMath::Floor(FMath::Sqrt((float)spawn_number));
+    int rank_per_side = side_length / FMath::Floor(FMath::Sqrt((float)mpi_world_size));
 
-    // find out which partition belongs to us in terms of the MPI world size
-    auto start_p = mpi_world_size % (int32)FMath::Sqrt((float)mpi_world_size);
-    auto start_q = FMath::Floor(FMath::Sqrt((float)mpi_world_size));
     // partition to indices
-    auto start_i = start_p * side_length / FMath::Sqrt((float)mpi_world_size);
-    auto start_j = start_q * side_length / FMath::Sqrt((float)mpi_world_size);
+    auto start_i = mpi_rank % rank_per_side;
+    auto start_j = mpi_rank / rank_per_side;
     // index to coordinate
     for (auto k = 0; k < local_count; k++)
     {
@@ -284,6 +298,7 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
       // random rotation
       auto r = FMath::RandRange(0.0f, 360.0f);
       auto plant = GetWorld()->SpawnActor<APlantParts>(APlantParts::StaticClass(), FVector(x, y, z), FRotator(0.0f, r, 0.0f));
+      this->FieldActors.Add(plant);
     }
 
     // send response

@@ -90,6 +90,13 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Callibration")
 	void Callibrate();
+
+	UFUNCTION(BlueprintCallable, Category = "Target")
+	bool IsIdling()
+	{
+    return CurrentMeasurementIndex == -1;
+	}
+
 	UFUNCTION(BlueprintCallable, Category = "Callibration")
 	void StopCallibrate(bool Failure = false);
 
@@ -101,7 +108,6 @@ public:
 
   UFUNCTION(BlueprintCallable, Category = "Target")
   void StartMeasurementAtObject(TArray<FVector> Points, float inTimePerMeasurement = 1.f);
-
 
 	// post edit change property for MeasureSurfaceSideLength
 #if WITH_EDITOR
@@ -126,6 +132,9 @@ protected:
 	bool bCallibrating = false;
 
 	float LastImpact = 0.f;
+
+
+  TFunction<void(TArray<float>)> OnMeasurementFinished{};
 
 	UPROPERTY()
 	UMaterial* LightMeterMaterial;

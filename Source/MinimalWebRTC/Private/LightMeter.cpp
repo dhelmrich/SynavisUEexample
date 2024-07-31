@@ -41,7 +41,7 @@ ALightMeter::ALightMeter()
 
   // set near clip plane of camera to no distance
   LightMeterTarget->ClipPlaneBase = NearClipPlane;
-  
+
   PIDController.SetMeasurement(&LightIntensity);
   PIDController.SetIncrementMeasurementLength(false);
 
@@ -61,7 +61,7 @@ void ALightMeter::SetMeasureSurfaceSize(float SideLength)
   LightMeasuringReference->SetWorldScale3D(FVector(SideLength / 100.0f, SideLength / 100.0f, 1.0f));
   // adapt FOVangle accordingly, 100 side length = 50 degrees FOV
   LightMeterTarget->FOVAngle = FMath::Atan(SideLength / DistanceToSurface) * 180.0f / PI;
-  LightMeterTarget->SetWorldScale3D(FVector(1.0,1.0,1.0) / (DistanceToSurface * 10.0f));
+  LightMeterTarget->SetWorldScale3D(FVector(1.0, 1.0, 1.0) / (DistanceToSurface * 10.0f));
 }
 
 void ALightMeter::AddAdjustmentSetting(float* Setting, double TargetAccuracy)
@@ -115,8 +115,7 @@ void ALightMeter::StopCallibrate(bool Failure)
 void ALightMeter::StartMeasurementAtObject(TArray<FVector> Points, float inTimePerMeasurement)
 {
   MeasurementPoints = Points;
-  this->TimePerMeasurement = inTimePerMeasurement;
-  this->TimeSpentMeasuring = 0.f;
+  LightInfluxes.SetNumZeroed(Points.Num());
   if (MeasurementPoints.Num() > 0)
   {
     // retrieve point
@@ -134,6 +133,7 @@ void ALightMeter::StartMeasurementAtObject(TArray<FVector> Points, float inTimeP
     this->SetActorLocation(point + normal * 10.0000009536743164);
     // set our rotation to the normal
     this->SetActorRotation(normal.Rotation());
+    this->TimePerMeasurement = inTimePerMeasurement;
     this->TimeSpentMeasuring = this->TimePerMeasurement;
   }
 }
@@ -247,9 +247,10 @@ void ALightMeter::Tick(float DeltaTime)
     skip--;
   }
 
-  if(this->TimeSpentMeasuring <= 0.f && CurrentMeasurementIndex < MeasurementPoints.Num())
+  if (this->TimeSpentMeasuring <= 0.f && CurrentMeasurementIndex < MeasurementPoints.Num()
+    && MeasurementPoints.Num() > 0)
   {
-    if(CurrentMeasurementIndex >= 0)
+    if (CurrentMeasurementIndex >= 0)
     {
       LightInfluxes[CurrentMeasurementIndex] /= CurrentMeasurementAmount;
       CurrentMeasurementAmount = 0;
@@ -269,7 +270,11 @@ void ALightMeter::Tick(float DeltaTime)
     this->SetActorRotation(normal.Rotation());
     this->TimeSpentMeasuring = this->TimePerMeasurement;
   }
-  else if (this->TimeSpentMeasuring > 0.f)
+  else if (this->TimeSpentMeasuring <= 0.f && CurrentMeasurementIndex >= MeasurementPoints.Num())
+  {
+    OnMeasurementFinished(LightInfluxes);
+  }
+  else if (this->TimeSpentMeasuring > 0.f && MeasurementPoints.Num() > 0)
   {
     this->TimeSpentMeasuring -= DeltaTime;
     LightInfluxes[CurrentMeasurementIndex] += this->LightIntensity;
