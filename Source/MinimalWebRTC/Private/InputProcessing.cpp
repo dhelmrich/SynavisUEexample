@@ -178,6 +178,8 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     auto ind = plant->AddMesh(Points, Normals, Indices, UV, {}, {}, type);
     auto material_key = FString::Printf(TEXT("%d/%d"), local_index, type);
     auto inst = WorldSpawner->GenerateInstanceFromName(material_key, false);
+    if(!inst)
+      UE_LOG(LogTemp, Error, TEXT("Material instance could not be created!"));
     plant->Mesh->SetMaterial(ind, inst);
   }
   else if (Type == TEXT("t"))
