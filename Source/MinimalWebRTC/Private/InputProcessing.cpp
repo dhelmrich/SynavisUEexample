@@ -120,7 +120,7 @@ void AInputProcessing::BeginPlay()
     {
       LightMeters.Add(Cast<ALightMeter>(*ActorItr));
     }
-    else if(ActorItr->GetName().Contains(TEXT("SunSky")))
+    else if (ActorItr->GetName().Contains(TEXT("SunSky")))
     {
       SunSky = *ActorItr;
     }
@@ -176,7 +176,7 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
       return;
     }
     auto ind = plant->AddMesh(Points, Normals, Indices, UV, {}, {}, type);
-    auto material_key = FString::Printf(TEXT("%n/%n"), local_index, type);
+    auto material_key = FString::Printf(TEXT("%d/%d"), local_index, type);
     auto inst = WorldSpawner->GenerateInstanceFromName(material_key, false);
     plant->Mesh->SetMaterial(ind, inst);
   }
@@ -190,7 +190,7 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     auto Points = GetArrayField<FVector>(Descriptor, "p");
     auto local_id = Descriptor->GetNumberField(TEXT("l"));
     auto* Meter = *LightMeters.FindByPredicate([](ALightMeter* Meter) { return Meter->IsIdling(); });
-    if(!Meter)
+    if (!Meter)
     {
       // schedule a task in game thread to retry
       FTimerHandle TimerHandle;
@@ -200,6 +200,21 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     {
       auto Duration = GetDoubleFieldOr(Descriptor, "d", 0.3);
       Meter->StartMeasurementAtObject(Points, Duration);
+      Meter->OnMeasurementFinished = [this, local_id](TArray<float> Intensities)
+      {
+
+        auto response = FString::Printf(TEXT("{\"type\":\"mm\",\"l\":%f,\"i\":["), local_id);
+        for (auto i = 0; i < Intensities.Num(); i++)
+        {
+          response += FString::Printf(TEXT("%f"), Intensities[i]);
+          if (i != Intensities.Num() - 1)
+          {
+            response += TEXT(",");
+          }
+        }
+        response += TEXT("]}");
+        Drone->SendResponse(response);
+      };
     }
   }
   else if (Type == "lightmeter")
@@ -288,11 +303,13 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     auto spawn_rule = GetStringFieldOr(Descriptor, TEXT("rule"), TEXT("square"));
     auto mpi_world_size = GetIntFieldOr(Descriptor, TEXT("mpi_world_size"), 1);
     auto mpi_rank = GetIntFieldOr(Descriptor, TEXT("mpi_rank"), 0);
-    auto density = GetDoubleFieldOr(Descriptor, TEXT("density"), 1.0f);
+    auto spacing = GetDoubleFieldOr(Descriptor, TEXT("spacing"), 1.0f);
 
     auto local_count = spawn_number / mpi_world_size;
     auto side_length = (int32)FMath::Floor(FMath::Sqrt((float)spawn_number));
-    int rank_per_side = side_length / FMath::Floor(FMath::Sqrt((float)mpi_world_size));
+    int rank_per_side = FMath::Sqrt((float)mpi_world_size);
+    int local_side_length = side_length / rank_per_side;
+
 
     // partition to indices
     auto start_i = mpi_rank % rank_per_side;
@@ -300,14 +317,14 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     // index to coordinate
     for (auto k = 0; k < local_count; k++)
     {
-      auto i = start_i + k % side_length;
-      auto j = start_j + k / side_length;
-      auto x = i * density;
-      auto y = j * density;
+      auto i = start_i + k % local_side_length;
+      auto j = start_j + k / local_side_length;
+      auto x = i * spacing;
+      auto y = j * spacing;
       auto z = 0.0f;
       // random rotation
       auto r = FMath::RandRange(0.0f, 360.0f);
-      auto plant = GetWorld()->SpawnActor<APlantParts>(APlantParts::StaticClass(), FVector(x, y, z), FRotator(0.0f, r, 0.0f));
+      auto plant = GetWorld()->SpawnActor<APlantParts>(PlantPartsClass, FVector(x, y, z) + this->ZeroPosition, FRotator(0.0f, r, 0.0f));
       this->FieldActors.Add(plant);
     }
 
