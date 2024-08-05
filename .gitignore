@@ -80,3 +80,8 @@ Linux/*
 # Cache files for the editor to use
 DerivedDataCache/*
 *.zip
+/Content/_GENERATED
+/Content/Megascans
+/Content/MSPresets
+/Content/MSPresets
+/Content/MSPresets
