@@ -126,11 +126,13 @@ void ALightMeter::StartMeasurementAtObject(TArray<FVector> Points, float inTimeP
     FHitResult Hitres;
     FCollisionQueryParams CollisionParams;
     CollisionParams.AddIgnoredActor(this);
-    GetWorld()->LineTraceSingleByChannel(Hitres, point + FVector(0, 0, 10), point - FVector(0, 0, 10), ECC_Visibility, CollisionParams);
+    GetWorld()->LineTraceSingleByChannel(Hitres, point + FVector(0, 0, SurfaceNormalEstimationLength),
+               point - FVector(0, 0, SurfaceNormalEstimationLength), ECC_Visibility, CollisionParams);
     // get normal
     auto normal = Hitres.ImpactNormal;
-    // set our position to point + normal*10.0000009536743164
-    this->SetActorLocation(point + normal * 10.0000009536743164);
+    // offset is 10 plus floating point error
+    constexpr float offset = 10.f + std::numeric_limits<float>::epsilon();
+    this->SetActorLocation(point + normal * offset);
     // set our rotation to the normal
     this->SetActorRotation(normal.Rotation());
     this->TimePerMeasurement = inTimePerMeasurement;
@@ -247,38 +249,39 @@ void ALightMeter::Tick(float DeltaTime)
     skip--;
   }
 
-  if (this->TimeSpentMeasuring <= 0.f && CurrentMeasurementIndex < MeasurementPoints.Num()
-    && MeasurementPoints.Num() > 0)
+  if (this->TimeSpentMeasuring <= 0.f && CurrentMeasurementIndex >= 0)
   {
-    if (CurrentMeasurementIndex >= 0)
+    LightInfluxes[CurrentMeasurementIndex] /= CurrentMeasurementAmount;
+    CurrentMeasurementAmount = 0;
+    if (++CurrentMeasurementIndex < MeasurementPoints.Num())
     {
-      LightInfluxes[CurrentMeasurementIndex] /= CurrentMeasurementAmount;
-      CurrentMeasurementAmount = 0;
+      // retrieve point
+      auto point = MeasurementPoints[CurrentMeasurementIndex];
+      // check the normal
+      FHitResult Hitres;
+      FCollisionQueryParams CollisionParams;
+      CollisionParams.AddIgnoredActor(this);
+      GetWorld()->LineTraceSingleByChannel(Hitres, point + FVector(0, 0, 10), point - FVector(0, 0, 10), ECC_Visibility, CollisionParams);
+      // get normal
+      auto normal = Hitres.ImpactNormal;
+      // set our position to point + normal*10.0000009536743164
+      this->SetActorLocation(point + normal * 10.0000009536743164);
+      // set our rotation to the normal
+      this->SetActorRotation(normal.Rotation());
+      this->TimeSpentMeasuring = this->TimePerMeasurement;
     }
-    // retrieve point
-    auto point = MeasurementPoints[++CurrentMeasurementIndex];
-    // check the normal
-    FHitResult Hitres;
-    FCollisionQueryParams CollisionParams;
-    CollisionParams.AddIgnoredActor(this);
-    GetWorld()->LineTraceSingleByChannel(Hitres, point + FVector(0, 0, 10), point - FVector(0, 0, 10), ECC_Visibility, CollisionParams);
-    // get normal
-    auto normal = Hitres.ImpactNormal;
-    // set our position to point + normal*10.0000009536743164
-    this->SetActorLocation(point + normal * 10.0000009536743164);
-    // set our rotation to the normal
-    this->SetActorRotation(normal.Rotation());
-    this->TimeSpentMeasuring = this->TimePerMeasurement;
-  }
-  else if (this->TimeSpentMeasuring <= 0.f && CurrentMeasurementIndex >= MeasurementPoints.Num())
-  {
-    OnMeasurementFinished(LightInfluxes);
+    else
+    {
+      if (OnMeasurementFinished != nullptr)
+        OnMeasurementFinished(LightInfluxes);
+      this->CurrentMeasurementIndex = -1;
+    }
   }
   else if (this->TimeSpentMeasuring > 0.f && MeasurementPoints.Num() > 0)
   {
     this->TimeSpentMeasuring -= DeltaTime;
-    LightInfluxes[CurrentMeasurementIndex] += this->LightIntensity;
     CurrentMeasurementAmount++;
+    LightInfluxes[CurrentMeasurementIndex] += this->LightIntensity;
   }
 }
 

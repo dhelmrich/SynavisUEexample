@@ -114,6 +114,8 @@ public:
    virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;	
 #endif
 
+  TFunction<void(TArray<float>)> OnMeasurementFinished{};
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
@@ -133,8 +135,9 @@ protected:
 
 	float LastImpact = 0.f;
 
+  UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category = "Target")
+	float SurfaceNormalEstimationLength = 0.1f;
 
-  TFunction<void(TArray<float>)> OnMeasurementFinished{};
 
 	UPROPERTY()
 	UMaterial* LightMeterMaterial;
@@ -147,7 +150,7 @@ protected:
 	UPROPERTY()
 	float TimePerMeasurement = 0.1f;
 	UPROPERTY()
-	float TimeSpentMeasuring = 0.f;
+	float TimeSpentMeasuring = 1.f;
 	int CurrentMeasurementIndex = -1;
 	int CurrentMeasurementAmount = 0;
 
