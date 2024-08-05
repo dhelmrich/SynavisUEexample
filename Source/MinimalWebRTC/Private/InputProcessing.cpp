@@ -269,12 +269,25 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
   }
   else if (Type == "spawnmeter")
   {
-    // spawn object of class LightMeter
-    auto LightMeter = GetWorld()->SpawnActor<ALightMeter>(ALightMeter::StaticClass());
-    // apply possible properties to it
-    Drone->ApplyJSONToObject(LightMeter, Descriptor.Get());
-    const FString name = LightMeter->GetName();
-    Drone->SendResponse(FString::Printf(TEXT("{\"type\":\"spawnmeter\",\"name\":\"%s\"}"), *name));
+    FString Response = TEXT("{\"type\":\"spawnmeter\",\"name\":\"[");
+    int number = GetIntFieldOr(Descriptor, TEXT("number"), 1);
+    UE_LOG(LogActor, Warning, TEXT("Spawning %d light meters"), number);
+    for (int i = 0; i < number; i++)
+    {
+      // spawn object of class LightMeter
+      auto LightMeter = GetWorld()->SpawnActor<ALightMeter>(LightMeterClass);
+      // apply possible properties to it
+      Drone->ApplyJSONToObject(LightMeter, Descriptor, false);
+      const FString name = LightMeter->GetName();
+      Response += name;
+      if (i != number - 1)
+      {
+        Response += TEXT(",");
+      }
+      this->LightMeters.Add(LightMeter);
+    }
+    Response += TEXT("]\"}");
+    Drone->SendResponse(Response);
   }
   else if (Type == "meter")
   {
