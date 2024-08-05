@@ -4,7 +4,10 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "LightMeter.h"
+#include "PlantParts.h"
 #include "InputProcessing.generated.h"
+
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FPixelStreamingResponseCallbackMinimal, FString, Message);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCameraDataSwitchCallback, int, Setting);
@@ -39,43 +42,49 @@ public:
   void InitializeCalibration();
 
   UPROPERTY()
-    class ASynavisDrone* Drone;
+  class ASynavisDrone* Drone;
   UPROPERTY()
-    class AWorldSpawner* WorldSpawner;
+  class AWorldSpawner* WorldSpawner;
 
   UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Visuals")
   class UMaterialInstanceDynamic* CallibrationMaterialInstance;
 
   UPROPERTY()
-    class UMaterial* StemBaseMaterial;
+  FVector ZeroPosition;
+
   UPROPERTY()
-    class UMaterial* LeafBaseMaterial;
+  class UMaterial* StemBaseMaterial;
+  UPROPERTY()
+  class UMaterial* LeafBaseMaterial;
 
   UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
   class AStaticMeshActor* CallibrationTest;
 
   UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
-    EDataCollectionType DataCollectionType = EDataCollectionType::None;
-    
+  EDataCollectionType DataCollectionType = EDataCollectionType::None;
+
   UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
-	TObjectPtr<AActor> SunSky;
+  TObjectPtr<AActor> SunSky;
 
   UFUNCTION(BlueprintCallable, Category = "Input Processing")
-    void UpdateTime(FString Timecode);
+  void UpdateTime(FString Timecode);
 
   UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
-    TArray<APlantParts*> FieldActors;
+  TArray<APlantParts*> FieldActors;
 
-    TArray<class ALightMeter*> LightMeters;
+  TArray<ALightMeter*> LightMeters;
 
   UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
-    FName ObjectName;
+  FName ObjectName;
 
-    UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Input Processing")
-    TMap<FString,TObjectPtr<UMaterialInstanceDynamic>> ActorMap;
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
+  TSubclassOf<APlantParts> PlantPartsClass = APlantParts::StaticClass();
 
-    UFUNCTION(BlueprintCallable, Category = "Input Processing")
-    TArray<float> MeasureLightInfluxOfMesh(AActor* Actor);
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
+  TSubclassOf<ALightMeter> LightMeterClass = ALightMeter::StaticClass();
+
+  UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Input Processing")
+  TMap<FString, TObjectPtr<UMaterialInstanceDynamic>> ActorMap;
 
 protected:
   // Called when the game starts
