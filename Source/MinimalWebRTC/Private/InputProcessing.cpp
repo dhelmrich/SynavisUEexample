@@ -125,6 +125,16 @@ void AInputProcessing::BeginPlay()
       SunSky = *ActorItr;
     }
   }
+
+  // set zero position to first hit below
+  FHitResult Hit;
+  FVector Start = this->GetRootComponent()->GetComponentLocation() + FVector(0.0f, 0.0f, 1000.0f);
+  FVector End = this->GetRootComponent()->GetComponentLocation() - FVector(0.0f, 0.0f, 1000.0f);
+  FCollisionQueryParams CollisionParams;
+  CollisionParams.AddIgnoredActor(this);
+  GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, CollisionParams);
+  ZeroPosition = Hit.ImpactPoint;
+
   Drone->ApplicationProcessInput = std::bind(&AInputProcessing::ProcessInput, this, std::placeholders::_1);
 }
 
