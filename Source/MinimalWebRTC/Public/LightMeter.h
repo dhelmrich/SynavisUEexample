@@ -94,8 +94,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Target")
 	bool IsIdling()
 	{
-    return CurrentMeasurementIndex == -1;
+    return MeasurementPoints.Num() == 0;
 	}
+
+  UFUNCTION(BlueprintCallable, Category = "Target")
+  void ResetMeasurement()
+  {
+    MeasurementPoints.Empty();
+    LightInfluxes.Empty();
+  }
 
 	UFUNCTION(BlueprintCallable, Category = "Callibration")
 	void StopCallibrate(bool Failure = false);

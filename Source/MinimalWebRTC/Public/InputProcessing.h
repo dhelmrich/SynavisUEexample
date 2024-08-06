@@ -52,6 +52,9 @@ public:
   UPROPERTY()
   FVector ZeroPosition;
 
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
+  float MeteringRetryTime = 0.5f;
+
   UPROPERTY()
   class UMaterial* StemBaseMaterial;
   UPROPERTY()

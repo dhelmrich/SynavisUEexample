@@ -24,6 +24,18 @@
 
 #define COMPACT TCondensedJsonPrintPolicy<TCHAR>
 
+inline void CleanArray(TArray<FVector>& Array)
+{
+  int lastIndex = Array.Num() - 1;
+  while(Array.IsValidIndex(lastIndex) && 
+    (Array[lastIndex] == FVector::ZeroVector || Array[lastIndex].ContainsNaN())
+    )
+  {
+    Array.RemoveAt(lastIndex);
+    lastIndex--;
+  }
+}
+
 // Sets default values for this component's properties
 AInputProcessing::AInputProcessing()
 {
@@ -167,6 +179,8 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     auto UV = GetArrayField<FVector2D>(Descriptor, "t");
     auto local_index = GetIntFieldOr(Descriptor, "l", 0);
     auto type = GetIntFieldOr(Descriptor, "o", 1);
+    CleanArray(Points);
+    CleanArray(Normals);
 
     // fetch plant from local index
     auto plant = (FieldActors.IsValidIndex(local_index)) ? FieldActors[local_index] : nullptr;
@@ -196,26 +210,23 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     {
       // schedule a task in game thread to retry
       FTimerHandle TimerHandle;
-      GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this, Descriptor]() { ProcessInput(Descriptor); }, 0.1f, false);
+      GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this, Descriptor]() { ProcessInput(Descriptor); }, MeteringRetryTime, false);
     }
     else
     {
       auto Duration = GetDoubleFieldOr(Descriptor, "d", 0.3);
       Meter->StartMeasurementAtObject(Points, Duration);
-      Meter->OnMeasurementFinished = [this, local_id](TArray<float> Intensities)
+      Meter->OnMeasurementFinished = [this, local_id, Meter](TArray<float> Intensities)
       {
 
-        auto response = FString::Printf(TEXT("{\"type\":\"mm\",\"l\":%f,\"i\":["), local_id);
-        for (auto i = 0; i < Intensities.Num(); i++)
-        {
-          response += FString::Printf(TEXT("%f"), Intensities[i]);
-          if (i != Intensities.Num() - 1)
-          {
-            response += TEXT(",");
-          }
-        }
-        response += TEXT("]}");
+        auto response = FString::Printf(TEXT("{\"type\":\"mm\",\"l\":%d,\"i\":\""), local_id);
+        response += FBase64::Encode(
+          reinterpret_cast<const uint8*>(Intensities.GetData()),
+          Intensities.Num() * sizeof(float)
+          );
+        response += TEXT("\"}");
         Drone->SendResponse(response);
+        Meter->ResetMeasurement();
       };
     }
   }
