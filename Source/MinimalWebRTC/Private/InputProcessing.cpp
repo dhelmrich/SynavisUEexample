@@ -19,7 +19,8 @@
 #include "Serialization/JsonWriter.h"
 #include "Dom/JsonObject.h"
 #include "Engine/StaticMeshActor.h"
-#include "LightMeter.h"
+
+#include "Components/DirectionalLightComponent.h"
 
 
 #define COMPACT TCondensedJsonPrintPolicy<TCHAR>
@@ -27,7 +28,7 @@
 inline void CleanArray(TArray<FVector>& Array)
 {
   int lastIndex = Array.Num() - 1;
-  while(Array.IsValidIndex(lastIndex) && 
+  while (Array.IsValidIndex(lastIndex) &&
     (Array[lastIndex] == FVector::ZeroVector || Array[lastIndex].ContainsNaN())
     )
   {
@@ -128,7 +129,7 @@ void AInputProcessing::BeginPlay()
     {
       WorldSpawner = Cast<AWorldSpawner>(*ActorItr);
     }
-    else if (ActorItr->IsA(ALightMeter::StaticClass()))
+    else if (ActorItr->IsA(LightMeterClass))
     {
       LightMeters.Add(Cast<ALightMeter>(*ActorItr));
     }
@@ -148,6 +149,31 @@ void AInputProcessing::BeginPlay()
   ZeroPosition = Hit.ImpactPoint;
 
   Drone->ApplicationProcessInput = std::bind(&AInputProcessing::ProcessInput, this, std::placeholders::_1);
+}
+
+void AInputProcessing::CheckCompletion(TArray<float> LightInfluxes, int Start, int End, ALightMeter* Meter)
+{
+  for (int i = Start; i < End; ++i)
+    this->LightFluxesAggregate[i] = LightInfluxes[i - Start];
+  Meter->ResetMeasurement();
+  // count down the number of light meters that are busy
+  LightMetersBusy.DecrementExchange();
+  if (LightMetersBusy.Load() == 0)
+  {
+    // send response
+    auto response = FString::Printf(TEXT("{\"type\":\"mm\",\"l\":%d,\"i\":\""), Start);
+    response += FBase64::Encode(
+      reinterpret_cast<const uint8*>(LightFluxesAggregate.GetData()),
+      LightFluxesAggregate.Num() * sizeof(float)
+    );
+    response += TEXT("\"}");
+    Drone->SendResponse(response);
+    LightFluxesAggregate.Empty();
+  }
+  if (Meter->NumMisses > 0)
+  {
+    Drone->SendResponse(FString::Printf(TEXT("{\"type\":\"error\", message:\"Light meter %s missed %d measurements\"}"), *Meter->GetName(), Meter->NumMisses));
+  }
 }
 
 // Called every frame
@@ -192,7 +218,7 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     auto ind = plant->AddMesh(Points, Normals, Indices, UV, {}, {}, type);
     auto material_key = FString::Printf(TEXT("%d/%d"), local_index, type);
     auto inst = WorldSpawner->GenerateInstanceFromName(material_key, false);
-    if(!inst)
+    if (!inst)
       UE_LOG(LogTemp, Error, TEXT("Material instance could not be created!"));
     plant->Mesh->SetMaterial(ind, inst);
   }
@@ -200,11 +226,24 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
   {
     auto Timecode = Descriptor->GetStringField(TEXT("s"));
     UpdateTime(Timecode);
+    if (Descriptor->HasField(TEXT("rad")))
+    {
+      auto* Sun = this->SunSky->FindComponentByClass<UDirectionalLightComponent>();
+      auto* IntensityProp = Sun->GetClass()->FindPropertyByName(TEXT("Intensity"));
+      double Intensity = Descriptor->GetNumberField(TEXT("rad"));
+      CastField<FFloatProperty>(IntensityProp)->SetPropertyValue_InContainer(Sun, (float)Intensity);
+      this->InitializeCalibration();
+    }
   }
   else if (Type == "mm")
   {
-    auto Points = GetArrayField<FVector>(Descriptor, "p");
     auto local_id = Descriptor->GetNumberField(TEXT("l"));
+    auto* PlantPart = this->FieldActors[local_id];
+    auto Points = GetArrayField<FVector>(Descriptor, "p");
+    for (auto& point : Points)
+    {
+      point += PlantPart->GetActorLocation();
+    }
     auto* Meter = *LightMeters.FindByPredicate([](ALightMeter* Meter) { return Meter->IsIdling(); });
     if (!Meter)
     {
@@ -216,18 +255,56 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     {
       auto Duration = GetDoubleFieldOr(Descriptor, "d", 0.3);
       Meter->StartMeasurementAtObject(Points, Duration);
-      Meter->OnMeasurementFinished = [this, local_id, Meter](TArray<float> Intensities)
-      {
-
-        auto response = FString::Printf(TEXT("{\"type\":\"mm\",\"l\":%d,\"i\":\""), local_id);
-        response += FBase64::Encode(
-          reinterpret_cast<const uint8*>(Intensities.GetData()),
-          Intensities.Num() * sizeof(float)
+      Meter->OnMeasurementFinished = [this, local_id, Meter](const TArray<float>& Intensities)
+        {
+          auto response = FString::Printf(TEXT("{\"type\":\"mm\",\"l\":%d,\"i\":\""), local_id);
+          response += FBase64::Encode(
+            reinterpret_cast<const uint8*>(Intensities.GetData()),
+            Intensities.Num() * sizeof(float)
           );
-        response += TEXT("\"}");
-        Drone->SendResponse(response);
-        Meter->ResetMeasurement();
-      };
+          response += TEXT("\"}");
+          Drone->SendResponse(response);
+          Meter->ResetMeasurement();
+        };
+    }
+  }
+  else if (Type == "mms")
+  {
+    auto Points = GetArrayField<FVector>(Descriptor, "p");
+    this->LightFluxesAggregate.SetNumZeroed(Points.Num());
+    auto local_id = Descriptor->GetNumberField(TEXT("l"));
+    auto* PlantPart = this->FieldActors[local_id];
+    for (auto& point : Points)
+    {
+      // rotate point by plant part rotation
+      point = PlantPart->GetActorRotation().RotateVector(point);
+      point += PlantPart->GetActorLocation();
+    }
+    // find all idle light meters
+    auto Meters = LightMeters.FilterByPredicate([](ALightMeter* Meter) { return Meter->IsIdling(); });
+    if (Meters.Num() == 0)
+    {
+      // schedule a task in game thread to retry
+      FTimerHandle TimerHandle;
+      GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this, Descriptor]() { ProcessInput(Descriptor); }, MeteringRetryTime, false);
+    }
+    else
+    {
+      auto Duration = GetDoubleFieldOr(Descriptor, "d", 0.3);
+      LightMetersBusy.Store(Meters.Num());
+      // distribute points to meters
+      for (int i = 0; i < Meters.Num(); ++i)
+      {
+        auto Meter = Meters[i];
+        auto Start = i * Points.Num() / Meters.Num();
+        auto End = FMath::Min((i + 1) * Points.Num() / Meters.Num(), Points.Num());
+        Meter->OnMeasurementFinished = [this, Start, End, Meter](const TArray<float>& Intensities)
+          {
+            this->CheckCompletion(Intensities, Start, End, Meter);
+          };
+        auto SubPoints = TArray<FVector>(Points.GetData() + Start, End - Start);
+        Meter->StartMeasurementAtObject(SubPoints, Duration);
+      }
     }
   }
   else if (Type == "lightmeter")
@@ -243,7 +320,7 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     else if (Descriptor->HasField(TEXT("sensitivity")))
     {
       float sensitivity = Descriptor->GetNumberField(TEXT("sensitivity"));
-      LightMeter->SetLightIntensity(sensitivity);
+      LightMeter->SetExposureBias(sensitivity);
     }
     auto response = FString::Printf(
       TEXT("{\"type\":\"lightmeter\",\"name\":\"%s\", position: {\"x\":%f,\"y\":%f,\"z\":%f}}, intensity: %f"),
@@ -285,6 +362,7 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     FString Response = TEXT("{\"type\":\"spawnmeter\",\"name\":\"[");
     int number = GetIntFieldOr(Descriptor, TEXT("number"), 1);
     UE_LOG(LogActor, Warning, TEXT("Spawning %d light meters"), number);
+    bool CallibrateOnSpawn = GetBoolFieldOr(Descriptor, TEXT("calibrate"), false);
     for (int i = 0; i < number; i++)
     {
       // spawn object of class LightMeter
@@ -298,6 +376,10 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
         Response += TEXT(",");
       }
       this->LightMeters.Add(LightMeter);
+    }
+    if (CallibrateOnSpawn)
+    {
+      this->InitializeCalibration();
     }
     Response += TEXT("]\"}");
     Drone->SendResponse(Response);
@@ -350,18 +432,44 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
       auto z = 0.0f;
       // random rotation
       auto r = FMath::RandRange(0.0f, 360.0f);
-      auto plant = GetWorld()->SpawnActor<APlantParts>(PlantPartsClass, FVector(x, y, z) + this->ZeroPosition, FRotator(0.0f, r, 0.0f));
+      auto plant = GetWorld()->SpawnActor<APlantParts>(PlantPartsClass, FVector(x, y, z) + this->ZeroPosition,
+        //FRotator(0.0f, r, 0.0f)
+        FRotator::ZeroRotator
+      );
       this->FieldActors.Add(plant);
     }
 
     // send response
     Drone->SendResponse(TEXT("{\"type\":\"placeplant\",\"status\":\"ok\"}"));
   }
+  else if (Type == "resetlights")
+  {
+    for (auto* p : FieldActors)
+    {
+      p->Mesh->ClearAllMeshSections();
+    }
+    for (auto* l : LightMeters)
+    {
+      l->ResetMeasurement();
+    }
+  }
 }
 
 void AInputProcessing::InitializeCalibration()
 {
-  CallibrationMaterialInstance = WorldSpawner->GenerateInstanceFromName("CallibrationMaterial", true);
-  CallibrationTest->GetStaticMeshComponent()->SetMaterial(0, CallibrationMaterialInstance);
+  if (ReferenceMeter)
+  {
+    // we assume that this meter is aimed at the sun in some way
+    const auto Intensity = ReferenceMeter->LightIntensity / ReferenceMeter->Sensitivity;
+    auto* Sun = this->SunSky->FindComponentByClass<UDirectionalLightComponent>();
+    auto* IntensityProp = Sun->GetClass()->FindPropertyByName(TEXT("Intensity"));
+    const auto* IntensityValue = CastField<FFloatProperty>(IntensityProp)->ContainerPtrToValuePtr<float>(Sun);
+    const auto IntensityWatts = *IntensityValue / 0.0079;
+    const auto NewMultiplier = IntensityWatts / Intensity;
+    for (auto* Meter : LightMeters)
+    {
+      Meter->Sensitivity = NewMultiplier;
+    }
+  }
 }
 

@@ -15,13 +15,13 @@ public:
 	PID();
 	~PID();
 
-	void SetTarget(float inTarget);
-	void SetMeasurement(float* inMeasurement) { measurement = inMeasurement; }
+	void SetTarget(double inTarget);
+	void SetMeasurement(double* inMeasurement) { measurement = inMeasurement; }
 	void Update();
-	void SetGains(TArray<float> inGains) { gains = inGains; }
-	void SetControlPointers(TArray<float*> inControlPointers) { ControlPointers = inControlPointers; }
+	void SetGains(TArray<double> inGains) { gains = inGains; }
+	void SetControlPointers(TArray<double*> inControlPointers) { ControlPointers = inControlPointers; }
 
-	void AddControlPoint(float* inControlPoint, float inGain)
+	void AddControlPoint(double* inControlPoint, double inGain)
 	{
 	  ControlPointers.Add(inControlPoint);
 	  gains.Add(inGain);
@@ -37,20 +37,20 @@ public:
 
 protected:
 	bool Verbose = true;
-	float StopThreshold = 0.001;
-	float* measurement = nullptr;
-	float target = -INFINITY;
-	TArray<float> measurePoints;
-	TArray<float*> ControlPointers;
-	TArray<float> lastChanges;
-	TArray<float> gains;
+	double StopThreshold = 0.001;
+	double* measurement = nullptr;
+	double target = -INFINITY;
+	TArray<double> measurePoints;
+	TArray<double*> ControlPointers;
+	TArray<double> lastChanges;
+	TArray<double> gains;
 	TFunction<void()> PostUpdateCallback;
-	float lastMeasurement = 0.0;
+	double lastMeasurement = 0.0;
 	bool windup = true;
 	bool done = false;
 	bool incrementMeasurementLength = false;
 	int64 maxMeasures = 50;
-	float OverallChange = 0.0;
+	double OverallChange = 0.0;
 	int64 NumAdjustments = 0;
 	
 	void EmptyMeasurePoints() { measurePoints.Empty(); }

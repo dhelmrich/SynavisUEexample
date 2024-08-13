@@ -11,6 +11,7 @@
 
 
 #include "Components/LightComponent.h"
+#include "Kismet/KismetMathLibrary.h"
 
 
 // Sets default values
@@ -20,10 +21,10 @@ ALightMeter::ALightMeter()
   PrimaryActorTick.bCanEverTick = true;
   // create the measurement surface
   LightMeasuringReference = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("LightMeasuringReference"));
-  RootComponent = LightMeasuringReference;
   LightMeterTarget = CreateDefaultSubobject<USceneCaptureComponent2D>(TEXT("LightMeterTarget"));
-  LightMeterTarget->AddLocalOffset(FVector(0.0f, 0.0f, 1.0f));
-  LightMeterTarget->SetupAttachment(RootComponent);
+  RootComponent = LightMeterTarget;
+  LightMeasuringReference->SetupAttachment(RootComponent);
+  LightMeasuringReference->AddLocalOffset(FVector(1.0f, 0.0f, 0.0f));
 
   // fetch /Script/Engine.StaticMesh'/Engine/BasicShapes/Plane.Plane'
   static ConstructorHelpers::FObjectFinder<UStaticMesh> PlaneMesh(TEXT("/Script/Engine.StaticMesh'/Engine/BasicShapes/Plane.Plane'"));
@@ -41,18 +42,19 @@ ALightMeter::ALightMeter()
 
   // set near clip plane of camera to no distance
   LightMeterTarget->ClipPlaneBase = NearClipPlane;
-
-  PIDController.SetMeasurement(&LightIntensity);
-  PIDController.SetIncrementMeasurementLength(false);
-
-
 }
 
-void ALightMeter::SetLightIntensity(float Intensity)
+void ALightMeter::SetExposureBias(double Intensity)
 {
 
   LightIntensity = Intensity;
-  LightMeterTarget->PostProcessSettings.AutoExposureBias = LightIntensity;
+  LightMeterTarget->PostProcessSettings.AutoExposureBias
+    = static_cast<float>(Intensity);
+}
+
+float ALightMeter::GetExposureBias()
+{
+  return LightMeterTarget->PostProcessSettings.AutoExposureBias;
 }
 
 void ALightMeter::SetMeasureSurfaceSize(float SideLength)
@@ -61,56 +63,8 @@ void ALightMeter::SetMeasureSurfaceSize(float SideLength)
   LightMeasuringReference->SetWorldScale3D(FVector(SideLength / 100.0f, SideLength / 100.0f, 1.0f));
   // adapt FOVangle accordingly, 100 side length = 50 degrees FOV
   LightMeterTarget->FOVAngle = FMath::Atan(SideLength / DistanceToSurface) * 180.0f / PI;
-  LightMeterTarget->SetWorldScale3D(FVector(1.0, 1.0, 1.0) / (DistanceToSurface * 10.0f));
 }
 
-void ALightMeter::AddAdjustmentSetting(float* Setting, double TargetAccuracy)
-{
-  PIDController.AddControlPoint(Setting, Rate);
-}
-
-void ALightMeter::AddSettingFromName(USceneComponent* Component, FName Name, double TargetAccuracy)
-{
-  auto prop = Component->GetClass()->FindPropertyByName(Name);
-  auto* val = prop->ContainerPtrToValuePtr<float>(Component);
-  if (val == nullptr)
-  {
-    UE_LOG(LogTemp, Error, TEXT("Could not find property %s in component %s"), *Name.ToString(), *Component->GetName());
-    return;
-  }
-  PIDController.AddControlPoint(val, TargetAccuracy);
-}
-
-void ALightMeter::RemoveAdjustmentSetting(float* Setting)
-{
-  int index = LightAdjustmentSetting.Find(Setting);
-  if (index >= 0)
-  {
-    LightAdjustmentSetting.RemoveAt(index);
-    CallibrationTargetAccuracies.RemoveAt(index);
-  }
-}
-
-void ALightMeter::SetTargetIntensity(double inTargetIntensity)
-{
-  TargetIntensity = inTargetIntensity;
-  PIDController.SetTarget(TargetIntensity);
-}
-
-void ALightMeter::Callibrate()
-{
-  bCallibrating = true;
-}
-
-void ALightMeter::StopCallibrate(bool Failure)
-{
-  bCallibrating = false;
-  if (Failure)
-  {
-    LightAdjustmentSetting.Empty();
-    CallibrationTargetAccuracies.Empty();
-  }
-}
 
 void ALightMeter::StartMeasurementAtObject(TArray<FVector> Points, float inTimePerMeasurement)
 {
@@ -122,19 +76,7 @@ void ALightMeter::StartMeasurementAtObject(TArray<FVector> Points, float inTimeP
     auto point = MeasurementPoints[0];
     CurrentMeasurementIndex = 0;
     CurrentMeasurementAmount = 0;
-    // check the normal
-    FHitResult Hitres;
-    FCollisionQueryParams CollisionParams;
-    CollisionParams.AddIgnoredActor(this);
-    GetWorld()->LineTraceSingleByChannel(Hitres, point + FVector(0, 0, SurfaceNormalEstimationLength),
-               point - FVector(0, 0, SurfaceNormalEstimationLength), ECC_Visibility, CollisionParams);
-    // get normal
-    auto normal = Hitres.ImpactNormal;
-    // offset is 10 plus floating point error
-    constexpr float offset = 10.f + std::numeric_limits<float>::epsilon();
-    this->SetActorLocation(point + normal * offset);
-    // set our rotation to the normal
-    this->SetActorRotation(normal.Rotation());
+    AimAtPoint(point);
     this->TimePerMeasurement = inTimePerMeasurement;
     this->TimeSpentMeasuring = this->TimePerMeasurement;
   }
@@ -158,7 +100,7 @@ void ALightMeter::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedE
   }
   else if (PropertyChangedEvent.GetPropertyName() == "DistanceToSurface")
   {
-    LightMeterTarget->SetRelativeLocation(FVector(0.0f, 0.0f, DistanceToSurface));
+    LightMeasuringReference->SetRelativeLocation(FVector(DistanceToSurface, 0.0f, 0.0f));
     SetMeasureSurfaceSize(MeasureSurfaceSideLength);
   }
 }
@@ -168,7 +110,6 @@ void ALightMeter::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedE
 void ALightMeter::BeginPlay()
 {
   Super::BeginPlay();
-  PIDController.SetTarget(TargetIntensity);
   LightMeterMaterialInstance = UMaterialInstanceDynamic::Create(LightMeterMaterial, this);
   LightMeasuringReference->SetMaterial(0, LightMeterMaterialInstance);
 
@@ -202,15 +143,39 @@ void ALightMeter::BeginPlay()
       }
     }
   }
+}
 
-  PIDController.SetPostUpdateCallback([this]()
-    {
-      for (auto L : Lights)
-      {
-        L->UpdateColorAndBrightness();
-      }
-      skip = 20;
-    });
+void ALightMeter::AimAtPoint(const UE::Math::TVector<double>& point)
+{
+  FHitResult Hitres;
+  FCollisionQueryParams CollisionParams;
+  CollisionParams.AddIgnoredActor(this);
+  GetWorld()->LineTraceSingleByChannel(Hitres, point + FVector(0, 0, SurfaceNormalEstimationLength), point - FVector(0, 0, SurfaceNormalEstimationLength), ECC_Visibility, CollisionParams);
+  
+  if(PrintProgress)
+  {
+    // debug draw point
+    DrawDebugPoint(GetWorld(), point + FVector(0, 0, SurfaceNormalEstimationLength), 10.0f, FColor::Red, false, 20.0f);
+    DrawDebugPoint(GetWorld(), point - FVector(0, 0, SurfaceNormalEstimationLength), 10.0f, FColor::Blue, false, 20.0f);
+  }
+  // get normal
+  FVector normal;
+  if (!Hitres.bBlockingHit)
+  {
+    UE_LOG(LogTemp, Error, TEXT("No hit detected at point %d"), CurrentMeasurementIndex);
+    normal = FVector(0, 0, 1);
+    NumMisses++;
+  }
+  else
+  {
+    normal = -Hitres.ImpactNormal;
+  }
+  auto rotation = UKismetMathLibrary::FindLookAtRotation(point + normal, point);
+  // set our position to point + normal*10.0000009536743164
+  constexpr float offset = 10.f + std::numeric_limits<float>::epsilon();
+  this->SetActorLocation(point);
+  // set our rotation to the normal
+  this->SetActorRotation(normal.Rotation());
 }
 
 // Called every frame
@@ -229,45 +194,25 @@ void ALightMeter::Tick(float DeltaTime)
     FColor Middle = CamData[CamData.Num() / 2];
 
     // calculate light intensity
-    LightIntensity = (Middle.R + Middle.G + Middle.B) / (3.0f * 255.f);
-    if (Counter > CounterMax)
+    LightIntensity = (Middle.R + Middle.G + Middle.B) / (3.0 * 255.0) * Sensitivity;
+    if (Counter > CounterMax && PrintIntensity)
     {
       Counter = 0;
       UE_LOG(LogTemp, Warning, TEXT("Light intensity: %f"), LightIntensity);
     }
   }
-  if (bCallibrating && skip == 0)
-  {
-    PIDController.Update();
-    if (PIDController.IsFinished())
-    {
-      StopCallibrate(false);
-    }
-  }
-  else if (skip > 0)
-  {
-    skip--;
-  }
-
   if (this->TimeSpentMeasuring <= 0.f && CurrentMeasurementIndex >= 0)
   {
     LightInfluxes[CurrentMeasurementIndex] /= CurrentMeasurementAmount;
     CurrentMeasurementAmount = 0;
+    if(PrintProgress)
+      UE_LOG(LogTemp, Warning, TEXT("Measured point %d/%d: %f"), CurrentMeasurementIndex, MeasurementPoints.Num(), LightInfluxes[CurrentMeasurementIndex]);
     if (++CurrentMeasurementIndex < MeasurementPoints.Num())
     {
       // retrieve point
       auto point = MeasurementPoints[CurrentMeasurementIndex];
       // check the normal
-      FHitResult Hitres;
-      FCollisionQueryParams CollisionParams;
-      CollisionParams.AddIgnoredActor(this);
-      GetWorld()->LineTraceSingleByChannel(Hitres, point + FVector(0, 0, 10), point - FVector(0, 0, 10), ECC_Visibility, CollisionParams);
-      // get normal
-      auto normal = Hitres.ImpactNormal;
-      // set our position to point + normal*10.0000009536743164
-      this->SetActorLocation(point + normal * 10.0000009536743164);
-      // set our rotation to the normal
-      this->SetActorRotation(normal.Rotation());
+      AimAtPoint(point);
       this->TimeSpentMeasuring = this->TimePerMeasurement;
     }
     else

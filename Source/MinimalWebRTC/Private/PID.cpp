@@ -12,7 +12,7 @@ PID::~PID()
 {
 }
 
-void PID::SetTarget(float inTarget)
+void PID::SetTarget(double inTarget)
 {
   target = inTarget;
   if (Verbose) UE_LOG(LogTemp, Warning, TEXT("PID target set to %f"), target);
@@ -26,8 +26,8 @@ void PID::Update()
   if (measurePoints.Num() >= maxMeasures)
   {
     // we know that light up should make it brighter. so calculate delta to target
-    float measurement_avg = std::accumulate(measurePoints.begin(), measurePoints.end(), 0.0) / static_cast<float>(measurePoints.Num());
-    float delta = target - measurement_avg;
+    double measurement_avg = std::accumulate(measurePoints.begin(), measurePoints.end(), 0.0) / static_cast<double>(measurePoints.Num());
+    double delta = target - measurement_avg;
     if(FMath::Abs(delta) < StopThreshold)
     {
       if(Verbose) UE_LOG(LogTemp, Warning, TEXT("PID reached target %f with delta %f"), target, delta);
@@ -56,12 +56,12 @@ void PID::Update()
     else
     {
       // we have a valid last measurement, so we can calculate the impact
-      float impact = measurement_avg - lastMeasurement;
+      double impact = measurement_avg - lastMeasurement;
       if(Verbose) UE_LOG(LogTemp, Warning, TEXT("PID impact: %f"), impact);
       // calculate the impact for each controller based on lastChanges
       for (int i = 0; i < ControlPointers.Num(); i++)
       {
-        float change = lastChanges[i] / impact;
+        double change = lastChanges[i] / impact;
         // multiply by delta to target to get the change we want
         change *= delta;
         // multiply by gains to get the change we want

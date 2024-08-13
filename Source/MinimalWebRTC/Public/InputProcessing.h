@@ -75,6 +75,7 @@ public:
   UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
   TArray<APlantParts*> FieldActors;
 
+  UPROPERTY()
   TArray<ALightMeter*> LightMeters;
 
   UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
@@ -92,9 +93,17 @@ public:
   UFUNCTION(BlueprintCallable, Category = "Input Processing")
   TArray<float> MeasureLightInfluxOfMesh(AActor* Actor);
 
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
+  TObjectPtr<ALightMeter> ReferenceMeter = nullptr;
+
 protected:
   // Called when the game starts
   virtual void BeginPlay() override;
+
+  void CheckCompletion(TArray<float> LightInfluxes, int Start, int End, ALightMeter* Meter);
+  TArray<float> LightFluxesAggregate;
+  TAtomic<int32> LightMetersBusy;
+
 public:
   // Called every frame
   virtual void Tick(float DeltaTime) override;

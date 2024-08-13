@@ -56,16 +56,16 @@ public:
 
 	// to be set only in render thread
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	float LightIntensity;
+	double LightIntensity;
 
 	UFUNCTION()
-	  void SetLightIntensity(float Intensity);
+	  void SetExposureBias(double Intensity);
+
+	UFUNCTION(BlueprintCallable)
+	float GetExposureBias();
 
 	UFUNCTION(BlueprintCallable)
 	void SetMeasureSurfaceSize(float SideLength);
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Callibration")
-	float Sensitivity = 1.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	int CounterMax = 50;
@@ -73,23 +73,6 @@ public:
 	// Side length property between 1 and 100
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = 1.0f, ClampMax = 100.0f))
 	float MeasureSurfaceSideLength = 100.0f;
-
-  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Callibration")
-  double TargetIntensity;
-	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Callibration")
-	double Rate = 0.1;
-
-	void AddAdjustmentSetting(float* Setting, double TargetAccuracy);
-
-	UFUNCTION(BlueprintCallable, Category = "Callibration")
-	void AddSettingFromName(USceneComponent* Component, FName Name, double TargetAccuracy);
-	void RemoveAdjustmentSetting(float* Setting);
-
-	UFUNCTION(BlueprintCallable, Category = "Callibration")
-	void SetTargetIntensity(double inTargetIntensity);
-
-	UFUNCTION(BlueprintCallable, Category = "Callibration")
-	void Callibrate();
 
 	UFUNCTION(BlueprintCallable, Category = "Target")
 	bool IsIdling()
@@ -102,10 +85,8 @@ public:
   {
     MeasurementPoints.Empty();
     LightInfluxes.Empty();
+    NumMisses = 0;
   }
-
-	UFUNCTION(BlueprintCallable, Category = "Callibration")
-	void StopCallibrate(bool Failure = false);
 
 	UPROPERTY(BlueprintReadWrite, VisibleAnywhere, Category = "Target")
 	int TargetID = -1;
@@ -121,32 +102,29 @@ public:
    virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;	
 #endif
 
-  TFunction<void(TArray<float>)> OnMeasurementFinished{};
+  TFunction<void(const TArray<float>& )> OnMeasurementFinished{};
+
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Target")
+  bool PrintProgress = true;
+
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Target")
+	bool PrintIntensity = false;
+
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Target")
+	int NumMisses = 0;
+
+  UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Target")
+	float SurfaceNormalEstimationLength = 1.0f;
+
+	UPROPERTY()
+	double Sensitivity = 1.0;
 
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
+  void AimAtPoint(const TArray<UE::Math::TVector<double>>::ElementType& point);
 
-	PID PIDController;
-
-	// Array of pointers to intensity values to be changed
-	TArray<float*> LightAdjustmentSetting;
-	// Array of when to stop callibrating, in descending order
-	// explanation:
-	// 0.9 for the first double pointer will stop adjusting this value
-	// once the intensity is within 10% of the target intensity
-	// After that, the next double pointer will be adjusted
-	// these numbers are always adding up to 1.0
-	TArray<double> CallibrationTargetAccuracies;
-	bool bCallibrating = false;
-
-	float LastImpact = 0.f;
-
-  UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category = "Target")
-	float SurfaceNormalEstimationLength = 0.1f;
-
-
-	UPROPERTY()
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
 	UMaterial* LightMeterMaterial;
 
 	UPROPERTY()
@@ -165,7 +143,6 @@ protected:
 	void CreateOrDestroyMeasurementSurface(bool bCreate);
 
 	int Counter = 0;
-
 
 public:	
 	// Called every frame
