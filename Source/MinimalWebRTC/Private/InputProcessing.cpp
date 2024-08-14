@@ -232,7 +232,9 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
       auto* IntensityProp = Sun->GetClass()->FindPropertyByName(TEXT("Intensity"));
       double Intensity = Descriptor->GetNumberField(TEXT("rad"));
       CastField<FFloatProperty>(IntensityProp)->SetPropertyValue_InContainer(Sun, (float)Intensity);
-      this->InitializeCalibration();
+      Sun->PropagateLightingScenarioChange();
+      Sun->InvalidateLightingCacheDetailed(true, false);
+      Sun->UpdateLightGUIDs();
     }
   }
   else if (Type == "mm")
