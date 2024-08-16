@@ -100,7 +100,7 @@ protected:
   // Called when the game starts
   virtual void BeginPlay() override;
 
-  void CheckCompletion(TArray<float> LightInfluxes, int Start, int End, ALightMeter* Meter);
+  void CheckCompletion(TArray<float> LightInfluxes, int Start, int End, ALightMeter* Meter, int LocalID);
   TArray<float> LightFluxesAggregate;
   TAtomic<int32> LightMetersBusy;
 

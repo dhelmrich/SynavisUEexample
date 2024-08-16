@@ -151,17 +151,19 @@ void AInputProcessing::BeginPlay()
   Drone->ApplicationProcessInput = std::bind(&AInputProcessing::ProcessInput, this, std::placeholders::_1);
 }
 
-void AInputProcessing::CheckCompletion(TArray<float> LightInfluxes, int Start, int End, ALightMeter* Meter)
+void AInputProcessing::CheckCompletion(TArray<float> LightInfluxes, int Start, int End, ALightMeter* Meter, int LocalID)
 {
   for (int i = Start; i < End; ++i)
     this->LightFluxesAggregate[i] = LightInfluxes[i - Start];
   Meter->ResetMeasurement();
+  UE_LOG(LogActor, Warning, TEXT("Light meter %s finished measuring %d points"), *Meter->GetName(), End - Start);
   // count down the number of light meters that are busy
   LightMetersBusy.DecrementExchange();
   if (LightMetersBusy.Load() == 0)
   {
+    UE_LOG(LogActor, Warning, TEXT("All light meters finished measuring"));
     // send response
-    auto response = FString::Printf(TEXT("{\"type\":\"mm\",\"l\":%d,\"i\":\""), Start);
+    auto response = FString::Printf(TEXT("{\"type\":\"mm\",\"l\":%d,\"i\":\""), LocalID);
     response += FBase64::Encode(
       reinterpret_cast<const uint8*>(LightFluxesAggregate.GetData()),
       LightFluxesAggregate.Num() * sizeof(float)
@@ -274,7 +276,7 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
   {
     auto Points = GetArrayField<FVector>(Descriptor, "p");
     this->LightFluxesAggregate.SetNumZeroed(Points.Num());
-    auto local_id = Descriptor->GetNumberField(TEXT("l"));
+    int local_id = Descriptor->GetNumberField(TEXT("l"));
     auto* PlantPart = this->FieldActors[local_id];
     for (auto& point : Points)
     {
@@ -292,6 +294,7 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     }
     else
     {
+      UE_LOG(LogActor, Warning, TEXT("I am dispatching %d meters to measure %d points for ID %d"), Meters.Num(), Points.Num(), local_id);
       auto Duration = GetDoubleFieldOr(Descriptor, "d", 0.3);
       LightMetersBusy.Store(Meters.Num());
       // distribute points to meters
@@ -300,10 +303,11 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
         auto Meter = Meters[i];
         auto Start = i * Points.Num() / Meters.Num();
         auto End = FMath::Min((i + 1) * Points.Num() / Meters.Num(), Points.Num());
-        Meter->OnMeasurementFinished = [this, Start, End, Meter](const TArray<float>& Intensities)
-          {
-            this->CheckCompletion(Intensities, Start, End, Meter);
-          };
+        Meter->OnMeasurementFinished = std::bind(&AInputProcessing::CheckCompletion, this, std::placeholders::_1, Start, End, Meter, local_id);
+        //Meter->OnMeasurementFinished = [this, Start, End, Meter, local_id](const TArray<float>& Intensities)
+        //  {
+        //    this->CheckCompletion(Intensities, Start, End, Meter, local_id);
+        //  };
         auto SubPoints = TArray<FVector>(Points.GetData() + Start, End - Start);
         Meter->StartMeasurementAtObject(SubPoints, Duration);
       }
@@ -453,6 +457,42 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     for (auto* l : LightMeters)
     {
       l->ResetMeasurement();
+    }
+  }
+  else if (Type == "delete")
+  {
+    FString kind = Descriptor->GetStringField(TEXT("kind"));
+    if (kind == TEXT("plant"))
+    {
+      // delete all plantparts in scene
+      for (auto* p : FieldActors)
+      {
+        p->Destroy();
+      }
+      FieldActors.Empty();
+    }
+    else if (kind == TEXT("lightmeter"))
+    {
+      // delete all lightmeters in scene
+      for (auto* l : LightMeters)
+      {
+        l->Destroy();
+      }
+      LightMeters.Empty();
+    }
+    else
+    {
+      // delete both
+      for (auto* p : FieldActors)
+      {
+        p->Destroy();
+      }
+      FieldActors.Empty();
+      for (auto* l : LightMeters)
+      {
+        l->Destroy();
+      }
+      LightMeters.Empty();
     }
   }
 }

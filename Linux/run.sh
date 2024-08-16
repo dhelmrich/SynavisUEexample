@@ -1,3 +1,9 @@
+# command line arguments:
+# $1: this file
+# $2: resolution x
+# $3: resolution y
+# $4: frame rate
+
 # extract the IP address of the machine
 adrline=$(ifconfig | awk /ib0/,/^$/ | awk /inet/,/$/)
 # extract the IP address, which is the second field seperated by space
