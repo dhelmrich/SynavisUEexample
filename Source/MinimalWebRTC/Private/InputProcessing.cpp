@@ -206,6 +206,7 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     auto Indices = GetArrayField<int32>(Descriptor, "i");
     auto UV = GetArrayField<FVector2D>(Descriptor, "t");
     auto local_index = GetIntFieldOr(Descriptor, "l", 0);
+    auto slot = GetIntFieldOr(Descriptor, "s", -1);
     auto type = GetIntFieldOr(Descriptor, "o", 1);
     CleanArray(Points);
     CleanArray(Normals);
@@ -217,12 +218,26 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
       Drone->SendResponse(TEXT("{\"type\":\"error\",\"message\":\"plant not found\"}"));
       return;
     }
-    auto ind = plant->AddMesh(Points, Normals, Indices, UV, {}, {}, type);
+    auto ind = plant->AddMesh(Points, Normals, Indices, UV, {}, {}, type, slot);
     auto material_key = FString::Printf(TEXT("%d/%d"), local_index, type);
     auto inst = WorldSpawner->GenerateInstanceFromName(material_key, false);
     if (!inst)
       UE_LOG(LogTemp, Error, TEXT("Material instance could not be created!"));
     plant->Mesh->SetMaterial(ind, inst);
+  }
+  else if (Type == TEXT("reset"))
+  {
+    auto local_index = GetIntFieldOr(Descriptor, TEXT("l"), 0);
+    auto plant = (FieldActors.IsValidIndex(local_index)) ? FieldActors[local_index] : nullptr;
+    if (!plant)
+    {
+      Drone->SendResponse(TEXT("{\"type\":\"error\",\"message\":\"plant not found\"}"));
+      return;
+    }
+    else
+    {
+      plant->Mesh->ClearAllMeshSections();
+    }
   }
   else if (Type == TEXT("t"))
   {
@@ -275,7 +290,6 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
   else if (Type == "mms")
   {
     auto Points = GetArrayField<FVector>(Descriptor, "p");
-    this->LightFluxesAggregate.SetNumZeroed(Points.Num());
     int local_id = Descriptor->GetNumberField(TEXT("l"));
     auto* PlantPart = this->FieldActors[local_id];
     for (auto& point : Points)
@@ -286,7 +300,7 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     }
     // find all idle light meters
     auto Meters = LightMeters.FilterByPredicate([](ALightMeter* Meter) { return Meter->IsIdling(); });
-    if (Meters.Num() == 0)
+    if (Meters.Num() == 0 || LightFluxesAggregate.Num() > 0)
     {
       // schedule a task in game thread to retry
       FTimerHandle TimerHandle;
@@ -294,6 +308,7 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     }
     else
     {
+      this->LightFluxesAggregate.SetNumZeroed(Points.Num());
       UE_LOG(LogActor, Warning, TEXT("I am dispatching %d meters to measure %d points for ID %d"), Meters.Num(), Points.Num(), local_id);
       auto Duration = GetDoubleFieldOr(Descriptor, "d", 0.3);
       LightMetersBusy.Store(Meters.Num());
