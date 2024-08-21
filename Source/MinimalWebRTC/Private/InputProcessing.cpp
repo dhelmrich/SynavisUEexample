@@ -100,7 +100,7 @@ TArray<float> AInputProcessing::MeasureLightInfluxOfMesh(AActor* Actor)
       {
         Material = Proxy->GetMaterialNoFallback(ERHIFeatureLevel::SM5);
       }
-
+      
       if (!Material)
       {
         UE_LOG(LogTemp, Error, TEXT("This Actor does not appear to contain a material."));
@@ -219,10 +219,17 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
       return;
     }
     auto ind = plant->AddMesh(Points, Normals, Indices, UV, {}, {}, type, slot);
+    UE_LOG(LogTemp, Warning, TEXT("Added mesh at index %d containing %d vertices and %d triangles"), ind, Points.Num(), Indices.Num() / 3);
     auto material_key = FString::Printf(TEXT("%d/%d"), local_index, type);
     auto inst = WorldSpawner->GenerateInstanceFromName(material_key, false);
     if (!inst)
+    {
       UE_LOG(LogTemp, Error, TEXT("Material instance could not be created!"));
+    }
+    else
+    {
+      UE_LOG(LogTemp, Warning, TEXT("Material instance named %s created"), *inst->GetName());
+    }
     plant->Mesh->SetMaterial(ind, inst);
   }
   else if (Type == TEXT("reset"))
@@ -384,6 +391,14 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     int number = GetIntFieldOr(Descriptor, TEXT("number"), 1);
     UE_LOG(LogActor, Warning, TEXT("Spawning %d light meters"), number);
     bool CallibrateOnSpawn = GetBoolFieldOr(Descriptor, TEXT("calibrate"), false);
+    bool Fillup = GetBoolFieldOr(Descriptor, TEXT("fillup"), false);
+    if(Fillup)
+    {
+      TArray<AActor*> FoundActors;
+      UGameplayStatics::GetAllActorsOfClass(GetWorld(), ALightMeter::StaticClass(), FoundActors);
+      // count the number of light meters in scene
+      number = FMath::Max(0, number - FoundActors.Num());
+    }
     for (int i = 0; i < number; i++)
     {
       // spawn object of class LightMeter
@@ -424,6 +439,18 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     }
     response += TEXT("]}");
     Drone->SendResponse(response);
+  }
+  else if (Type == "calibrate")
+  {
+    double flux_value = Descriptor->GetNumberField(TEXT("flux"));
+    // we assume that this meter is aimed at the sun in some way
+    const auto Intensity = ReferenceMeter->LightIntensity / ReferenceMeter->Sensitivity;
+    auto* Sun = this->SunSky->FindComponentByClass<UDirectionalLightComponent>();
+    const auto NewMultiplier = flux_value / Intensity;
+    for (auto* Meter : LightMeters)
+    {
+      Meter->Sensitivity = NewMultiplier;
+    }
   }
   else if (Type == "placeplant")
   {
