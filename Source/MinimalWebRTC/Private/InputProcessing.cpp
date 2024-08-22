@@ -315,6 +315,8 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     }
     else
     {
+      // make sure that we do not allocate more meters than we have points
+      Meters.SetNum(FMath::Min(Meters.Num(), Points.Num()));
       this->LightFluxesAggregate.SetNumZeroed(Points.Num());
       UE_LOG(LogActor, Warning, TEXT("I am dispatching %d meters to measure %d points for ID %d"), Meters.Num(), Points.Num(), local_id);
       auto Duration = GetDoubleFieldOr(Descriptor, "d", 0.3);
