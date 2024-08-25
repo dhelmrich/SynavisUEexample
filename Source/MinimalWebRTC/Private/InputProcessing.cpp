@@ -337,6 +337,41 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
       }
     }
   }
+  else if(Type == "pms")
+  {
+    auto Points = GetArrayField<FVector>(Descriptor, "p");
+    // find all idle light meters
+    auto Meters = LightMeters.FilterByPredicate([](ALightMeter* Meter) { return Meter->IsIdling(); });
+    if (Meters.Num() == 0 || LightFluxesAggregate.Num() > 0)
+    {
+      // schedule a task in game thread to retry
+      FTimerHandle TimerHandle;
+      GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this, Descriptor]() { ProcessInput(Descriptor); }, MeteringRetryTime, false);
+    }
+    else
+    {
+      // make sure that we do not allocate more meters than we have points
+      Meters.SetNum(FMath::Min(Meters.Num(), Points.Num()));
+      this->LightFluxesAggregate.SetNumZeroed(Points.Num());
+      UE_LOG(LogActor, Warning, TEXT("I am dispatching %d meters to measure %d points for parallel execution"), Meters.Num(), Points.Num());
+      auto Duration = GetDoubleFieldOr(Descriptor, "d", 0.3);
+      LightMetersBusy.Store(Meters.Num());
+      // distribute points to meters
+      for (int i = 0; i < Meters.Num(); ++i)
+      {
+        auto Meter = Meters[i];
+        auto Start = i * Points.Num() / Meters.Num();
+        auto End = FMath::Min((i + 1) * Points.Num() / Meters.Num(), Points.Num());
+        Meter->OnMeasurementFinished = std::bind(&AInputProcessing::CheckCompletion, this, std::placeholders::_1, Start, End, Meter, -1);
+        //Meter->OnMeasurementFinished = [this, Start, End, Meter, local_id](const TArray<float>& Intensities)
+        //  {
+        //    this->CheckCompletion(Intensities, Start, End, Meter, local_id);
+        //  };
+        auto SubPoints = TArray<FVector>(Points.GetData() + Start, End - Start);
+        Meter->StartMeasurementAtObject(SubPoints, Duration);
+      }
+    }
+  }
   else if (Type == "lightmeter")
   {
     auto object = Descriptor->GetObjectField(TEXT("object"));
@@ -367,7 +402,7 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     auto result = MakeShared<FJsonObject>();
     TArray<AActor*> FoundActors;
     // find all light meters in scene
-    UGameplayStatics::GetAllActorsOfClass(GetWorld(), ALightMeter::StaticClass(), FoundActors);
+    UGameplayStatics::GetAllActorsOfClass(GetWorld(), LightMeterClass, FoundActors);
     for (auto* Actor : FoundActors)
     {
       auto LightMeter = Cast<ALightMeter>(Actor);
@@ -397,7 +432,7 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     if(Fillup)
     {
       TArray<AActor*> FoundActors;
-      UGameplayStatics::GetAllActorsOfClass(GetWorld(), ALightMeter::StaticClass(), FoundActors);
+      UGameplayStatics::GetAllActorsOfClass(GetWorld(), LightMeterClass, FoundActors);
       // count the number of light meters in scene
       number = FMath::Max(0, number - FoundActors.Num());
     }
@@ -428,7 +463,7 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     auto result = MakeShared<FJsonObject>();
     TArray<AActor*> FoundActors;
     // find all light meters in scene
-    UGameplayStatics::GetAllActorsOfClass(GetWorld(), ALightMeter::StaticClass(), FoundActors);
+    UGameplayStatics::GetAllActorsOfClass(GetWorld(), LightMeterClass, FoundActors);
     FString response = TEXT("{\"type\":\"meter\",\"meters\":[");
     for (auto* Actor : FoundActors)
     {
@@ -447,7 +482,6 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     double flux_value = Descriptor->GetNumberField(TEXT("flux"));
     // we assume that this meter is aimed at the sun in some way
     const auto Intensity = ReferenceMeter->LightIntensity / ReferenceMeter->Sensitivity;
-    auto* Sun = this->SunSky->FindComponentByClass<UDirectionalLightComponent>();
     const auto NewMultiplier = flux_value / Intensity;
     for (auto* Meter : LightMeters)
     {
@@ -538,6 +572,11 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
       }
       LightMeters.Empty();
     }
+  }
+  else if(Type == "quit")
+  {
+    // quit the application
+    FGenericPlatformMisc::RequestExit(false);
   }
 }
 
