@@ -74,6 +74,7 @@ void AInputProcessing::UpdateTime(FString Timecode)
   CastField<FIntProperty>(month_prop)->SetPropertyValue_InContainer(SunSky, month);
   CastField<FIntProperty>(day_prop)->SetPropertyValue_InContainer(SunSky, day);
   CastField<FDoubleProperty>(solartime_prop)->SetPropertyValue_InContainer(SunSky, solartime);
+  this->RefSolarTime = solartime;
 }
 
 TArray<float> AInputProcessing::MeasureLightInfluxOfMesh(AActor* Actor)
@@ -156,12 +157,12 @@ void AInputProcessing::CheckCompletion(TArray<float> LightInfluxes, int Start, i
   for (int i = Start; i < End; ++i)
     this->LightFluxesAggregate[i] = LightInfluxes[i - Start];
   Meter->ResetMeasurement();
-  UE_LOG(LogActor, Warning, TEXT("Light meter %s finished measuring %d points"), *Meter->GetName(), End - Start);
+  UE_LOG(LogTemp, Warning, TEXT("Light meter %s finished measuring %d points"), *Meter->GetName(), End - Start);
   // count down the number of light meters that are busy
   LightMetersBusy.DecrementExchange();
   if (LightMetersBusy.Load() == 0)
   {
-    UE_LOG(LogActor, Warning, TEXT("All light meters finished measuring"));
+    UE_LOG(LogTemp, Warning, TEXT("All light meters finished measuring"));
     // send response
     auto response = FString::Printf(TEXT("{\"type\":\"mm\",\"l\":%d,\"i\":\""), LocalID);
     response += FBase64::Encode(
@@ -215,8 +216,19 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     auto plant = (FieldActors.IsValidIndex(local_index)) ? FieldActors[local_index] : nullptr;
     if (!plant)
     {
-      Drone->SendResponse(TEXT("{\"type\":\"error\",\"message\":\"plant not found\"}"));
-      return;
+      if(local_index < 0)
+      {
+        if(!BufferGeometry)
+        {
+          BufferGeometry = GetWorld()->SpawnActor<APlantParts>(PlantPartsClass, this->ZeroPosition, FRotator::ZeroRotator);
+        }
+        plant = BufferGeometry;
+      }
+      else
+      {
+        Drone->SendResponse(TEXT("{\"type\":\"error\",\"message\":\"plant not found for spawning\"}"));
+        return;
+      }
     }
     auto ind = plant->AddMesh(Points, Normals, Indices, UV, {}, {}, type, slot);
     UE_LOG(LogTemp, Warning, TEXT("Added mesh at index %d containing %d vertices and %d triangles"), ind, Points.Num(), Indices.Num() / 3);
@@ -238,7 +250,7 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     auto plant = (FieldActors.IsValidIndex(local_index)) ? FieldActors[local_index] : nullptr;
     if (!plant)
     {
-      Drone->SendResponse(TEXT("{\"type\":\"error\",\"message\":\"plant not found\"}"));
+      Drone->SendResponse(TEXT("{\"type\":\"error\",\"message\":\"plant not found for reset\"}"));
       return;
     }
     else
@@ -318,7 +330,7 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
       // make sure that we do not allocate more meters than we have points
       Meters.SetNum(FMath::Min(Meters.Num(), Points.Num()));
       this->LightFluxesAggregate.SetNumZeroed(Points.Num());
-      UE_LOG(LogActor, Warning, TEXT("I am dispatching %d meters to measure %d points for ID %d"), Meters.Num(), Points.Num(), local_id);
+      UE_LOG(LogTemp, Warning, TEXT("I am dispatching %d meters to measure %d points for ID %d"), Meters.Num(), Points.Num(), local_id);
       auto Duration = GetDoubleFieldOr(Descriptor, "d", 0.3);
       LightMetersBusy.Store(Meters.Num());
       // distribute points to meters
@@ -340,6 +352,10 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
   else if(Type == "pms")
   {
     auto Points = GetArrayField<FVector>(Descriptor, "p");
+    for(auto& point : Points)
+    {
+      point += this->ZeroPosition;
+    }
     // find all idle light meters
     auto Meters = LightMeters.FilterByPredicate([](ALightMeter* Meter) { return Meter->IsIdling(); });
     if (Meters.Num() == 0 || LightFluxesAggregate.Num() > 0)
@@ -353,8 +369,9 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
       // make sure that we do not allocate more meters than we have points
       Meters.SetNum(FMath::Min(Meters.Num(), Points.Num()));
       this->LightFluxesAggregate.SetNumZeroed(Points.Num());
-      UE_LOG(LogActor, Warning, TEXT("I am dispatching %d meters to measure %d points for parallel execution"), Meters.Num(), Points.Num());
+      UE_LOG(LogTemp, Warning, TEXT("I am dispatching %d meters to measure %d points for parallel execution"), Meters.Num(), Points.Num());
       auto Duration = GetDoubleFieldOr(Descriptor, "d", 0.3);
+      auto ChunkId = GetIntFieldOr(Descriptor, "l", 0);
       LightMetersBusy.Store(Meters.Num());
       // distribute points to meters
       for (int i = 0; i < Meters.Num(); ++i)
@@ -362,11 +379,7 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
         auto Meter = Meters[i];
         auto Start = i * Points.Num() / Meters.Num();
         auto End = FMath::Min((i + 1) * Points.Num() / Meters.Num(), Points.Num());
-        Meter->OnMeasurementFinished = std::bind(&AInputProcessing::CheckCompletion, this, std::placeholders::_1, Start, End, Meter, -1);
-        //Meter->OnMeasurementFinished = [this, Start, End, Meter, local_id](const TArray<float>& Intensities)
-        //  {
-        //    this->CheckCompletion(Intensities, Start, End, Meter, local_id);
-        //  };
+        Meter->OnMeasurementFinished = std::bind(&AInputProcessing::CheckCompletion, this, std::placeholders::_1, Start, End, Meter, ChunkId);
         auto SubPoints = TArray<FVector>(Points.GetData() + Start, End - Start);
         Meter->StartMeasurementAtObject(SubPoints, Duration);
       }
@@ -426,7 +439,7 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
   {
     FString Response = TEXT("{\"type\":\"spawnmeter\",\"name\":\"[");
     int number = GetIntFieldOr(Descriptor, TEXT("number"), 1);
-    UE_LOG(LogActor, Warning, TEXT("Spawning %d light meters"), number);
+    UE_LOG(LogTemp, Warning, TEXT("Spawning %d light meters"), number);
     bool CallibrateOnSpawn = GetBoolFieldOr(Descriptor, TEXT("calibrate"), false);
     bool Fillup = GetBoolFieldOr(Descriptor, TEXT("fillup"), false);
     if(Fillup)
@@ -482,6 +495,11 @@ void AInputProcessing::ProcessInput(TSharedPtr<FJsonObject> Descriptor)
     double flux_value = Descriptor->GetNumberField(TEXT("flux"));
     // we assume that this meter is aimed at the sun in some way
     const auto Intensity = ReferenceMeter->LightIntensity / ReferenceMeter->Sensitivity;
+    if (Intensity < std::numeric_limits<float>::epsilon())
+    {
+      Drone->SendResponse(TEXT("{\"type\":\"error\",\"message\":\"Reference meter has zero intensity\"}"));
+      return;
+    }
     const auto NewMultiplier = flux_value / Intensity;
     for (auto* Meter : LightMeters)
     {
@@ -584,7 +602,8 @@ void AInputProcessing::InitializeCalibration()
 {
   if (ReferenceMeter)
   {
-    // we assume that this meter is aimed at the sun in some way
+    // Reference Meter (of the blueprint class) is always aimed at the
+    // directional light in the scene
     const auto Intensity = ReferenceMeter->LightIntensity / ReferenceMeter->Sensitivity;
     auto* Sun = this->SunSky->FindComponentByClass<UDirectionalLightComponent>();
     auto* IntensityProp = Sun->GetClass()->FindPropertyByName(TEXT("Intensity"));

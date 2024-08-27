@@ -79,6 +79,9 @@ public:
   TArray<ALightMeter*> LightMeters;
 
   UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
+  APlantParts* BufferGeometry { nullptr};
+
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
   FName ObjectName;
 
   UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Input Processing")
@@ -103,6 +106,8 @@ protected:
   void CheckCompletion(TArray<float> LightInfluxes, int Start, int End, ALightMeter* Meter, int LocalID);
   TArray<float> LightFluxesAggregate;
   TAtomic<int32> LightMetersBusy;
+
+  double RefSolarTime{0.0};
 
 public:
   // Called every frame
