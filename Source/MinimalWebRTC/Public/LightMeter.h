@@ -152,5 +152,4 @@ public:
 private:
 	int32 skip = 0;
 
-	TArray<ULightComponent*> Lights;
 };

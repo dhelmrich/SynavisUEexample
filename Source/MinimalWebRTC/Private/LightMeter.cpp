@@ -12,6 +12,7 @@
 
 #include "Components/LightComponent.h"
 #include "Kismet/KismetMathLibrary.h"
+ 	#include "ImageUtils.h"
 
 
 // Sets default values
@@ -46,8 +47,6 @@ ALightMeter::ALightMeter()
 
 void ALightMeter::SetExposureBias(double Intensity)
 {
-
-  LightIntensity = Intensity;
   LightMeterTarget->PostProcessSettings.AutoExposureBias
     = static_cast<float>(Intensity);
 }
@@ -121,28 +120,7 @@ void ALightMeter::BeginPlay()
   // set LightMeasuringReference (camera) to render to the new render target
   Target->TargetGamma = 1.0f;
 
-  LightMeterTarget->PostProcessSettings.AutoExposureBias = this->LightIntensity;
-
-
-  // search scene for all ULightComponents
-  TArray<AActor*> FoundActors;
-  // get all world actors
-  UGameplayStatics::GetAllActorsOfClass(GetWorld(), AActor::StaticClass(), FoundActors);
-  for (auto* Actor : FoundActors)
-  {
-    // get all components of actor
-    TArray<UActorComponent*> FoundComponents;
-    Actor->GetComponents(FoundComponents);
-    for (auto* Component : FoundComponents)
-    {
-      // check if component is a light component
-      if (ULightComponent* LightComponent = Cast<ULightComponent>(Component))
-      {
-        // add light component to array
-        Lights.Add(LightComponent);
-      }
-    }
-  }
+  LightMeterTarget->PostProcessSettings.AutoExposureBias = 5.f;
 }
 
 void ALightMeter::AimAtPoint(const UE::Math::TVector<double>& point)
@@ -173,7 +151,8 @@ void ALightMeter::AimAtPoint(const UE::Math::TVector<double>& point)
   auto rotation = UKismetMathLibrary::FindLookAtRotation(point + normal, point);
   // set our position to point + normal*10.0000009536743164
   constexpr float offset = 10.f + std::numeric_limits<float>::epsilon();
-  this->SetActorLocation(point);
+  this->SetActorLocation(point + normal * offset
+  );
   // set our rotation to the normal
   this->SetActorRotation(normal.Rotation());
 }
@@ -184,17 +163,21 @@ void ALightMeter::Tick(float DeltaTime)
   Super::Tick(DeltaTime);
   if (CounterMax >= 0) ++Counter;
   // enqueue render command to read pixels from render target
-  auto Source = Target->GameThread_GetRenderTargetResource();
-  TArray<FColor> CamData;
+  //auto Source = Target->GameThread_GetRenderTargetResource();
+  //TArray<FColor> CamData;
+  //TArray<FLinearColor> LinearCamData;
   FReadSurfaceDataFlags ReadPixelFlags(ERangeCompressionMode::RCM_MinMax);
   ReadPixelFlags.SetLinearToGamma(true);
-  if (Source->ReadPixels(CamData, ReadPixelFlags))
+  FImage Image;
+  FImageUtils::GetRenderTargetImage(this->Target, Image);
+  //if (Source->ReadPixels(CamData, ReadPixelFlags))
+  if(Image.GetNumPixels() > 0)
   {
-    FColor TopLeft = CamData[0];
-    FColor Middle = CamData[CamData.Num() / 2];
-
+    //FColor TopLeft = CamData[0];
+    //FColor Middle = CamData[CamData.Num() / 2];
+    FLinearColor Middle = Image.GetOnePixelLinear(Image.GetWidth() / 2, Image.GetHeight() / 2, 0);
     // calculate light intensity
-    LightIntensity = (Middle.R + Middle.G + Middle.B) / (3.0 * 255.0) * Sensitivity;
+    LightIntensity = (Middle.R + Middle.G + Middle.B) / (300.0) * Sensitivity;
     if (Counter > CounterMax && PrintIntensity)
     {
       Counter = 0;
