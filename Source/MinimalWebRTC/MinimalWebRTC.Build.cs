@@ -11,7 +11,7 @@ public class MinimalWebRTC : ModuleRules
 		PublicDependencyModuleNames.AddRange(new string[]
         {
             "Core", "CoreUObject", "Engine", "InputCore", "Json", "PixelStreaming", "SynavisUE", "ProceduralMeshComponent",
-			"RHICore", "RHI", "RenderCore"
+			"RHICore", "RHI", "RenderCore", "ImageCore"
         });
 
 		PrivateDependencyModuleNames.AddRange(new string[] { "PixelStreaming" });
