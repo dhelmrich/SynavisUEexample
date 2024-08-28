@@ -12,7 +12,7 @@
 
 #include "Components/LightComponent.h"
 #include "Kismet/KismetMathLibrary.h"
- 	#include "ImageUtils.h"
+#include "ImageUtils.h"
 
 
 // Sets default values
@@ -162,19 +162,10 @@ void ALightMeter::Tick(float DeltaTime)
 {
   Super::Tick(DeltaTime);
   if (CounterMax >= 0) ++Counter;
-  // enqueue render command to read pixels from render target
-  //auto Source = Target->GameThread_GetRenderTargetResource();
-  //TArray<FColor> CamData;
-  //TArray<FLinearColor> LinearCamData;
-  FReadSurfaceDataFlags ReadPixelFlags(ERangeCompressionMode::RCM_MinMax);
-  ReadPixelFlags.SetLinearToGamma(true);
-  FImage Image;
+#ifdef READ_USING_IMAGE
   FImageUtils::GetRenderTargetImage(this->Target, Image);
-  //if (Source->ReadPixels(CamData, ReadPixelFlags))
   if(Image.GetNumPixels() > 0)
   {
-    //FColor TopLeft = CamData[0];
-    //FColor Middle = CamData[CamData.Num() / 2];
     FLinearColor Middle = Image.GetOnePixelLinear(Image.GetWidth() / 2, Image.GetHeight() / 2, 0);
     // calculate light intensity
     LightIntensity = (Middle.R + Middle.G + Middle.B) / (300.0) * Sensitivity;
@@ -184,6 +175,26 @@ void ALightMeter::Tick(float DeltaTime)
       UE_LOG(LogTemp, Warning, TEXT("Light intensity: %f"), LightIntensity);
     }
   }
+#else
+  // enqueue render command to read pixels from render target
+  auto Source = Target->GameThread_GetRenderTargetResource();
+  CamData.SetNum(Target->SizeX * Target->SizeY);
+  FReadSurfaceDataFlags ReadPixelFlags(ERangeCompressionMode::RCM_MinMax);
+  ReadPixelFlags.SetLinearToGamma(true);
+
+  if (Source->ReadPixels(CamData, ReadPixelFlags))
+  {
+    //FColor TopLeft = CamData[0];
+    FColor Middle = CamData[CamData.Num() / 2];
+    // calculate light intensity
+    LightIntensity = (Middle.R + Middle.G + Middle.B) / (3 * 256) * Sensitivity;
+    if (Counter > CounterMax && PrintIntensity)
+    {
+      Counter = 0;
+      UE_LOG(LogTemp, Warning, TEXT("Light intensity: %f"), LightIntensity);
+    }
+  }
+#endif
   if (this->TimeSpentMeasuring <= 0.f && CurrentMeasurementIndex >= 0)
   {
     LightInfluxes[CurrentMeasurementIndex] /= CurrentMeasurementAmount;

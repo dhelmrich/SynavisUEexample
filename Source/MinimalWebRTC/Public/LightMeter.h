@@ -8,6 +8,8 @@
 #include "Containers/Deque.h"
 #include "LightMeter.generated.h"
 
+//#define READ_USING_IMAGE
+
 
 USTRUCT()
 struct FLightMeterData
@@ -143,6 +145,12 @@ protected:
 	void CreateOrDestroyMeasurementSurface(bool bCreate);
 
 	int Counter = 0;
+
+#ifdef READ_USING_IMAGE
+	FImage Image;
+#else
+  TArray<FColor> CamData;
+#endif
 
 public:	
 	// Called every frame
