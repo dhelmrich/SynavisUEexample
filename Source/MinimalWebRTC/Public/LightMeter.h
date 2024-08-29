@@ -148,8 +148,12 @@ protected:
 
 #ifdef READ_USING_IMAGE
 	FImage Image;
-#else
+#elif defined READ_UINT8
   TArray<FColor> CamData;
+#define INTENSITY_FACTOR (3*256)
+#else
+  TArray<FLinearColor> CamData;
+#define INTENSITY_FACTOR (300.0)
 #endif
 
 public:	

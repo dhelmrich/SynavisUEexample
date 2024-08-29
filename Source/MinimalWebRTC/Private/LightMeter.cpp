@@ -181,13 +181,16 @@ void ALightMeter::Tick(float DeltaTime)
   CamData.SetNum(Target->SizeX * Target->SizeY);
   FReadSurfaceDataFlags ReadPixelFlags(ERangeCompressionMode::RCM_MinMax);
   ReadPixelFlags.SetLinearToGamma(true);
-
+#ifdef READ_UINT8
   if (Source->ReadPixels(CamData, ReadPixelFlags))
+#else
+  if (Source->ReadLinearColorPixels(CamData, ReadPixelFlags))
+#endif
   {
     //FColor TopLeft = CamData[0];
-    FColor Middle = CamData[CamData.Num() / 2];
+    auto Middle = CamData[CamData.Num() / 2];
     // calculate light intensity
-    LightIntensity = (Middle.R + Middle.G + Middle.B) / (3 * 256) * Sensitivity;
+    LightIntensity = (Middle.R + Middle.G + Middle.B) / INTENSITY_FACTOR * Sensitivity;
     if (Counter > CounterMax && PrintIntensity)
     {
       Counter = 0;
