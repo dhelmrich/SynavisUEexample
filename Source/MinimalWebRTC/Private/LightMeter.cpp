@@ -1,6 +1,5 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-
 #include "LightMeter.h"
 
 #include <numeric>
@@ -13,6 +12,8 @@
 #include "Components/LightComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "ImageUtils.h"
+
+
 
 
 // Sets default values
@@ -121,6 +122,16 @@ void ALightMeter::BeginPlay()
   Target->TargetGamma = 1.0f;
 
   LightMeterTarget->PostProcessSettings.AutoExposureBias = 5.f;
+
+  CamData.SetNumZeroed(Target->SizeX * Target->SizeY);
+  
+
+  auto RHI = GDynamicRHI;
+  // if RHI is Vulkan RHI
+  if (FString(RHI->GetName()).Contains("Vulkan"))
+  {
+    bVulkanRHI = true;
+  }
 }
 
 void ALightMeter::AimAtPoint(const UE::Math::TVector<double>& point)
@@ -129,8 +140,8 @@ void ALightMeter::AimAtPoint(const UE::Math::TVector<double>& point)
   FCollisionQueryParams CollisionParams;
   CollisionParams.AddIgnoredActor(this);
   GetWorld()->LineTraceSingleByChannel(Hitres, point + FVector(0, 0, SurfaceNormalEstimationLength), point - FVector(0, 0, SurfaceNormalEstimationLength), ECC_Visibility, CollisionParams);
-  
-  if(PrintProgress)
+
+  if (PrintProgress)
   {
     // debug draw point
     DrawDebugPoint(GetWorld(), point + FVector(0, 0, SurfaceNormalEstimationLength), 10.0f, FColor::Red, false, 20.0f);
@@ -161,10 +172,34 @@ void ALightMeter::AimAtPoint(const UE::Math::TVector<double>& point)
 void ALightMeter::Tick(float DeltaTime)
 {
   Super::Tick(DeltaTime);
+  FlushRenderingCommands();
+  
+  // Get RHI pointer
+  // enqueue render command to read pixels from render target
+  ENQUEUE_RENDER_COMMAND(FETCHRESOURCE)
+  (
+    [this](FRHICommandListImmediate& RHICmdList)
+    {
+      //GDynamicRHI->RHIBlockUntilGPUIdle();
+      CamData.SetNum(Target->SizeX * Target->SizeY);
+      if(!Target
+        )
+      {
+        return;
+      }
+      auto Source = Target->GetRenderTargetResource()->GetTexture2DRHI();
+      if (!Source
+        )
+      {
+        return;
+      }
+      RHICmdList.ReadSurfaceFloatData(Source, FIntRect(0, 0, Target->SizeX, Target->SizeY), CamData, FReadSurfaceDataFlags());
+    }
+  );
   if (CounterMax >= 0) ++Counter;
 #ifdef READ_USING_IMAGE
   FImageUtils::GetRenderTargetImage(this->Target, Image);
-  if(Image.GetNumPixels() > 0)
+  if (Image.GetNumPixels() > 0)
   {
     FLinearColor Middle = Image.GetOnePixelLinear(Image.GetWidth() / 2, Image.GetHeight() / 2, 0);
     // calculate light intensity
@@ -173,18 +208,12 @@ void ALightMeter::Tick(float DeltaTime)
     {
       Counter = 0;
       UE_LOG(LogTemp, Warning, TEXT("Light intensity: %f"), LightIntensity);
-    }
+}
   }
 #else
-  // enqueue render command to read pixels from render target
-  auto Source = Target->GameThread_GetRenderTargetResource();
-  CamData.SetNum(Target->SizeX * Target->SizeY);
-  FReadSurfaceDataFlags ReadPixelFlags(ERangeCompressionMode::RCM_MinMax);
-  ReadPixelFlags.SetLinearToGamma(true);
+
 #ifdef READ_UINT8
   if (Source->ReadPixels(CamData, ReadPixelFlags))
-#else
-  if (Source->ReadLinearColorPixels(CamData, ReadPixelFlags))
 #endif
   {
     //FColor TopLeft = CamData[0];
@@ -202,7 +231,7 @@ void ALightMeter::Tick(float DeltaTime)
   {
     LightInfluxes[CurrentMeasurementIndex] /= CurrentMeasurementAmount;
     CurrentMeasurementAmount = 0;
-    if(PrintProgress)
+    if (PrintProgress)
       UE_LOG(LogTemp, Warning, TEXT("Measured point %d/%d: %f"), CurrentMeasurementIndex, MeasurementPoints.Num(), LightInfluxes[CurrentMeasurementIndex]);
     if (++CurrentMeasurementIndex < MeasurementPoints.Num())
     {

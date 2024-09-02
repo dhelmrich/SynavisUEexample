@@ -152,7 +152,7 @@ protected:
   TArray<FColor> CamData;
 #define INTENSITY_FACTOR (3*256)
 #else
-  TArray<FLinearColor> CamData;
+  TArray<FFloat16Color> CamData;
 #define INTENSITY_FACTOR (300.0)
 #endif
 
@@ -163,5 +163,7 @@ public:
 
 private:
 	int32 skip = 0;
+
+	bool bVulkanRHI = false;
 
 };
